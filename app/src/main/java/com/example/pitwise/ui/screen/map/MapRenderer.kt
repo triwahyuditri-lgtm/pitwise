@@ -293,8 +293,11 @@ private fun DrawScope.drawDxfPaths(
         // To get 1.5 pixels, W must be 1.5 / mapScale.
         // We add a safety check for scale > 0.
         val targetScreenPx = 1.5f
-        val safeScale = abs(mapScale).coerceAtLeast(1e-4f)
-        val strokeWidth = (targetScreenPx / safeScale).coerceIn(0.5f, 200f)
+        // IMPORTANT: do not clamp scale too aggressively here.
+        // For very large drawings, mapScale can be extremely small (e.g. 1e-6).
+        // To keep ~constant on-screen thickness, local stroke must grow as 1/scale.
+        val safeScale = abs(mapScale).coerceAtLeast(1e-12f)
+        val strokeWidth = (targetScreenPx / safeScale).coerceAtLeast(0.5f)
         
         // Validation logging
         if ("dxf" !in validated) {
@@ -319,7 +322,7 @@ private fun DrawScope.drawDxfPaths(
         // Radius R will be drawn as R * mapScale pixels.
         // To get 3 pixels, R = 3 / mapScale.
         val targetRadiusPx = 3f
-        val pointRadius = (targetRadiusPx / safeScale).coerceIn(1f, 150f)
+        val pointRadius = (targetRadiusPx / safeScale).coerceAtLeast(1f)
 
         geometry.points.forEach { (colorInt, pointsList) ->
             val pointColor = Color(colorInt)
