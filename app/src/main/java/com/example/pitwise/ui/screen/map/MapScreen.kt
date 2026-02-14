@@ -356,7 +356,7 @@ fun MapScreen(
                                 val wx = (tapOffset.x - offsetX) / scale
                                 val rawY = (tapOffset.y - offsetY) / scale
                                 val wy = if (viewModel.transformEngine.flipY) -rawY else rawY
-                                viewModel.onMapTap(worldX = wx.toDouble(), worldY = wy.toDouble())
+                                viewModel.onMapTap(worldX = wx.toDouble(), worldY = wy.toDouble(), currentScale = scale)
                             },
                             onDoubleTap = { tapOffset ->
                                 val zoomFactor = 1.5f

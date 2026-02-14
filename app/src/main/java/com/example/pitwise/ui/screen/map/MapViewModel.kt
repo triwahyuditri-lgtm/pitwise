@@ -415,7 +415,7 @@ class MapViewModel @Inject constructor(
     // Map Tap Handling
     // ════════════════════════════════════════════════════
 
-    fun onMapTap(worldX: Double, worldY: Double) {
+    fun onMapTap(worldX: Double, worldY: Double, currentScale: Float) {
         // Query Snap Engine
         // worldX/worldY are Local (Visual) coordinates from MapRenderer tap event.
         
@@ -456,7 +456,8 @@ class MapViewModel @Inject constructor(
             // Dynamic Snap Radius: ~30 screen pixels
             // radiusWorld = radiusPixels / scale
             val screenTolerancePx = 30.0 
-            val detectionRadius = screenTolerancePx / _uiState.value.scale
+            val effectiveScale = currentScale.coerceAtLeast(1e-6f)
+            val detectionRadius = screenTolerancePx / effectiveScale
 
             val snapResult = snapEngine.findVertex(finalLocalX, finalLocalY, detectionRadius)
             if (snapResult != null) {

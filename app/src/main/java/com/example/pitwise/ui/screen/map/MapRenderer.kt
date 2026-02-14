@@ -25,6 +25,7 @@ import com.example.pitwise.domain.map.MapSerializationUtils
 import com.example.pitwise.domain.map.MapTransformEngine
 import com.example.pitwise.domain.map.MapVertex
 import com.example.pitwise.domain.map.MeasureSubMode
+import kotlin.math.abs
 
 /**
  * High-performance map canvas renderer.
@@ -292,13 +293,20 @@ private fun DrawScope.drawDxfPaths(
         // To get 1.5 pixels, W must be 1.5 / mapScale.
         // We add a safety check for scale > 0.
         val targetScreenPx = 1.5f
-        val strokeWidth = if (mapScale > 0) targetScreenPx / mapScale else 1f
+        // IMPORTANT: do not clamp scale too aggressively here.
+        // For very large drawings, mapScale can be extremely small (e.g. 1e-6).
+        // To keep ~constant on-screen thickness, local stroke must grow as 1/scale.
+        val safeScale = abs(mapScale).coerceAtLeast(1e-12f)
+        val strokeWidth = (targetScreenPx / safeScale).coerceAtLeast(0.5f)
         
         // Validation logging
         if ("dxf" !in validated) {
             validated.add("dxf")
-            Log.d("DXF_RENDER_VALIDATE", "Drawing Relative: center=(${geometry.centerX}, ${geometry.centerY}) " +
-                "screen=(${screenCenter.x}, ${screenCenter.y}) strokeWidth=$strokeWidth scale=$mapScale")
+            Log.d(
+                "DXF_RENDER_VALIDATE",
+                "Drawing Relative: center=(${geometry.centerX}, ${geometry.centerY}) " +
+                    "screen=(${screenCenter.x}, ${screenCenter.y}) strokeWidth=$strokeWidth scale=$mapScale safeScale=$safeScale"
+            )
         }
         
         geometry.paths.forEach { (colorInt, path) ->
@@ -314,7 +322,7 @@ private fun DrawScope.drawDxfPaths(
         // Radius R will be drawn as R * mapScale pixels.
         // To get 3 pixels, R = 3 / mapScale.
         val targetRadiusPx = 3f
-        val pointRadius = if (mapScale > 0) targetRadiusPx / mapScale else 2f
+        val pointRadius = (targetRadiusPx / safeScale).coerceAtLeast(1f)
 
         geometry.points.forEach { (colorInt, pointsList) ->
             val pointColor = Color(colorInt)
