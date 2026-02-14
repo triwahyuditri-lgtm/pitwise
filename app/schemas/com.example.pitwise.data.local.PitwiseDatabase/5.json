@@ -1,0 +1,568 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 5,
+    "identityHash": "ec3bf6de1390fd65b36037e0be1d47b4",
+    "entities": [
+      {
+        "tableName": "unit_brand",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `category` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "unit_model",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `brand_id` INTEGER NOT NULL, `model_name` TEXT NOT NULL, `category` TEXT NOT NULL, `source` TEXT NOT NULL, `version` INTEGER NOT NULL, `is_active` INTEGER NOT NULL, `last_updated` INTEGER NOT NULL, FOREIGN KEY(`brand_id`) REFERENCES `unit_brand`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "brandId",
+            "columnName": "brand_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "modelName",
+            "columnName": "model_name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "version",
+            "columnName": "version",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isActive",
+            "columnName": "is_active",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastUpdated",
+            "columnName": "last_updated",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_unit_model_brand_id",
+            "unique": false,
+            "columnNames": [
+              "brand_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_unit_model_brand_id` ON `${TABLE_NAME}` (`brand_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "unit_brand",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "brand_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "unit_spec",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `model_id` INTEGER NOT NULL, `material` TEXT, `bucket_capacity_m3` REAL, `bucket_capacity_lcm` REAL, `vessel_capacity_m3` REAL, `vessel_capacity_ton` REAL, `fill_factor_default` REAL, `swell_factor` REAL, `specific_gravity` REAL, `job_efficiency` REAL, `cycle_time_ref_sec` REAL, `speed_loaded_kmh` REAL, `speed_empty_kmh` REAL, `engine_power_hp` REAL, `productivity` REAL, `spotting_time_sec` REAL, `queueing_time_sec` REAL, `dumping_time_sec` REAL, `return_speed_kmh` REAL, `blade_width_m` REAL, `blade_height_m` REAL, `blade_volume_m3` REAL, `dozing_length_m` REAL, `blade_factor` REAL, `forward_speed_kmh` REAL, `reverse_speed_kmh` REAL, `shifting_time_min` REAL, `positioning_time_min` REAL, `created_by` TEXT NOT NULL, FOREIGN KEY(`model_id`) REFERENCES `unit_model`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "modelId",
+            "columnName": "model_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "material",
+            "columnName": "material",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "bucketCapacityM3",
+            "columnName": "bucket_capacity_m3",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "bucketCapacityLcm",
+            "columnName": "bucket_capacity_lcm",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "vesselCapacityM3",
+            "columnName": "vessel_capacity_m3",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "vesselCapacityTon",
+            "columnName": "vessel_capacity_ton",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "fillFactorDefault",
+            "columnName": "fill_factor_default",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "swellFactor",
+            "columnName": "swell_factor",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "specificGravity",
+            "columnName": "specific_gravity",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "jobEfficiency",
+            "columnName": "job_efficiency",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "cycleTimeRefSec",
+            "columnName": "cycle_time_ref_sec",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "speedLoadedKmh",
+            "columnName": "speed_loaded_kmh",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "speedEmptyKmh",
+            "columnName": "speed_empty_kmh",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "enginePowerHp",
+            "columnName": "engine_power_hp",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "productivity",
+            "columnName": "productivity",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "spottingTimeSec",
+            "columnName": "spotting_time_sec",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "queueingTimeSec",
+            "columnName": "queueing_time_sec",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "dumpingTimeSec",
+            "columnName": "dumping_time_sec",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "returnSpeedKmh",
+            "columnName": "return_speed_kmh",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "bladeWidthM",
+            "columnName": "blade_width_m",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "bladeHeightM",
+            "columnName": "blade_height_m",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "bladeVolumeM3",
+            "columnName": "blade_volume_m3",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "dozingLengthM",
+            "columnName": "dozing_length_m",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "bladeFactor",
+            "columnName": "blade_factor",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "forwardSpeedKmh",
+            "columnName": "forward_speed_kmh",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "reverseSpeedKmh",
+            "columnName": "reverse_speed_kmh",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "shiftingTimeMin",
+            "columnName": "shifting_time_min",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "positioningTimeMin",
+            "columnName": "positioning_time_min",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "createdBy",
+            "columnName": "created_by",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_unit_spec_model_id",
+            "unique": false,
+            "columnNames": [
+              "model_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_unit_spec_model_id` ON `${TABLE_NAME}` (`model_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "unit_model",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "model_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "user_session",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `user_id` TEXT, `role` TEXT NOT NULL, `last_login` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "userId",
+            "columnName": "user_id",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "role",
+            "columnName": "role",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastLogin",
+            "columnName": "last_login",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "base_unit_version",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `version_number` INTEGER NOT NULL, `imported_at` INTEGER NOT NULL, `record_count` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "versionNumber",
+            "columnName": "version_number",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "importedAt",
+            "columnName": "imported_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recordCount",
+            "columnName": "record_count",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "maps",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `type` TEXT NOT NULL, `uri` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `last_opened` INTEGER NOT NULL, `is_active` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "uri",
+            "columnName": "uri",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastOpened",
+            "columnName": "last_opened",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isActive",
+            "columnName": "is_active",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "map_annotations",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `map_id` INTEGER NOT NULL, `type` TEXT NOT NULL, `points_json` TEXT NOT NULL, `label` TEXT NOT NULL, `color` TEXT NOT NULL, `distance` REAL NOT NULL, `area` REAL NOT NULL, `created_at` INTEGER NOT NULL, FOREIGN KEY(`map_id`) REFERENCES `maps`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mapId",
+            "columnName": "map_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pointsJson",
+            "columnName": "points_json",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "label",
+            "columnName": "label",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "color",
+            "columnName": "color",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "distance",
+            "columnName": "distance",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "area",
+            "columnName": "area",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_map_annotations_map_id",
+            "unique": false,
+            "columnNames": [
+              "map_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_map_annotations_map_id` ON `${TABLE_NAME}` (`map_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "maps",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "map_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      }
+    ],
+    "views": [],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'ec3bf6de1390fd65b36037e0be1d47b4')"
+    ]
+  }
+}
