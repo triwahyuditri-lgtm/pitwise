@@ -110,10 +110,10 @@ class MapTransformEngine {
         maxX: Double, maxY: Double,
         canvasW: Float, canvasH: Float
     ) {
-        val worldW = (maxX - minX).toFloat()
-        val worldH = (maxY - minY).toFloat()
-
-        if (worldW <= 0f || worldH <= 0f || canvasW <= 0f || canvasH <= 0f) {
+        val worldW = maxX - minX
+        val worldH = maxY - minY
+        
+        if (worldW <= 0.0 || worldH <= 0.0 || canvasW <= 0f || canvasH <= 0f) {
             Log.w(TAG, "zoomAll: invalid dimensions worldW=$worldW worldH=$worldH canvasW=$canvasW canvasH=$canvasH")
             return
         }
@@ -122,18 +122,26 @@ class MapTransformEngine {
         val availW = canvasW - padding * 2
         val availH = canvasH - padding * 2
 
-        scale = minOf(availW / worldW, availH / worldH).coerceIn(MIN_SCALE, MAX_SCALE)
+        // Use Double for scale calculation to handle very large extents vs small screens
+        val scaleD = minOf(availW.toDouble() / worldW, availH.toDouble() / worldH)
+            .coerceIn(MIN_SCALE.toDouble(), MAX_SCALE.toDouble())
+            
+        scale = scaleD.toFloat()
 
-        val centerWorldX = ((minX + maxX) / 2.0).toFloat()
-        val centerWorldY = ((minY + maxY) / 2.0).toFloat()
+        val centerWorldX = (minX + maxX) / 2.0
+        val centerWorldY = (minY + maxY) / 2.0
 
         // Center the bounding box in the canvas
-        offsetX = canvasW / 2f - centerWorldX * scale
-        offsetY = if (flipY) {
-            canvasH / 2f + centerWorldY * scale  // Y flipped
+        // Calculate offsets using Double precision first before casting to Float
+        val offsetXDouble = canvasW.toDouble() / 2.0 - centerWorldX * scaleD
+        val offsetYDouble = if (flipY) {
+            canvasH.toDouble() / 2.0 + centerWorldY * scaleD  // Y flipped
         } else {
-            canvasH / 2f - centerWorldY * scale
+            canvasH.toDouble() / 2.0 - centerWorldY * scaleD
         }
+        
+        offsetX = offsetXDouble.toFloat()
+        offsetY = offsetYDouble.toFloat()
 
         Log.d(TAG, "zoomAll: scale=$scale offsetX=$offsetX offsetY=$offsetY " +
             "bounds=[$minX..$maxX, $minY..$maxY] canvas=${canvasW}x${canvasH}")
@@ -156,7 +164,7 @@ class MapTransformEngine {
 
     companion object {
         private const val TAG = "DXF_TRANSFORM"
-        const val MIN_SCALE = 1e-7f
+        const val MIN_SCALE = 1e-12f
         const val MAX_SCALE = 20f
         const val ZOOM_ALL_PADDING = 40f
         const val DOUBLE_TAP_ZOOM_FACTOR = 1.5f
