@@ -25,6 +25,7 @@ import com.example.pitwise.domain.map.MapSerializationUtils
 import com.example.pitwise.domain.map.MapTransformEngine
 import com.example.pitwise.domain.map.MapVertex
 import com.example.pitwise.domain.map.MeasureSubMode
+import kotlin.math.abs
 
 /**
  * High-performance map canvas renderer.
@@ -292,13 +293,17 @@ private fun DrawScope.drawDxfPaths(
         // To get 1.5 pixels, W must be 1.5 / mapScale.
         // We add a safety check for scale > 0.
         val targetScreenPx = 1.5f
-        val strokeWidth = if (mapScale > 0) targetScreenPx / mapScale else 1f
+        val safeScale = abs(mapScale).coerceAtLeast(1e-4f)
+        val strokeWidth = (targetScreenPx / safeScale).coerceIn(0.5f, 200f)
         
         // Validation logging
         if ("dxf" !in validated) {
             validated.add("dxf")
-            Log.d("DXF_RENDER_VALIDATE", "Drawing Relative: center=(${geometry.centerX}, ${geometry.centerY}) " +
-                "screen=(${screenCenter.x}, ${screenCenter.y}) strokeWidth=$strokeWidth scale=$mapScale")
+            Log.d(
+                "DXF_RENDER_VALIDATE",
+                "Drawing Relative: center=(${geometry.centerX}, ${geometry.centerY}) " +
+                    "screen=(${screenCenter.x}, ${screenCenter.y}) strokeWidth=$strokeWidth scale=$mapScale safeScale=$safeScale"
+            )
         }
         
         geometry.paths.forEach { (colorInt, path) ->
@@ -314,7 +319,7 @@ private fun DrawScope.drawDxfPaths(
         // Radius R will be drawn as R * mapScale pixels.
         // To get 3 pixels, R = 3 / mapScale.
         val targetRadiusPx = 3f
-        val pointRadius = if (mapScale > 0) targetRadiusPx / mapScale else 2f
+        val pointRadius = (targetRadiusPx / safeScale).coerceIn(1f, 150f)
 
         geometry.points.forEach { (colorInt, pointsList) ->
             val pointColor = Color(colorInt)
