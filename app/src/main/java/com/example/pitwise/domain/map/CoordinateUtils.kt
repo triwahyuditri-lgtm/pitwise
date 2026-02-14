@@ -27,11 +27,34 @@ object CoordinateUtils {
     /**
      * Convert WGS84 lat/lng to UTM.
      * Uses standard Transverse Mercator projection formulas.
+     *
+     * @param lat Latitude in degrees
+     * @param lng Longitude in degrees
+     * @param forceZone Optional: Force a specific UTM zone (1-60). If null, calculated from longitude.
+     * @param forceHemisphere Optional: Force 'N' or 'S'. If null, calculated from latitude.
      */
-    fun latLngToUtm(lat: Double, lng: Double): UtmCoordinate {
-        val zone = ((lng + 180.0) / 6.0).toInt() + 1
-        val letter = utmLetterDesignator(lat)
-
+    fun latLngToUtm(
+        lat: Double,
+        lng: Double,
+        forceZone: Int? = null,
+        forceHemisphere: Char? = null
+    ): UtmCoordinate {
+        // 1. Determine Zone
+        val zone = forceZone ?: ((lng + 180.0) / 6.0).toInt() + 1
+        
+        // 2. Determine Hemsiphere / Band
+        // If not forced, calculate standard band letter
+        val letter = if (forceHemisphere != null) {
+            if (forceHemisphere.uppercaseChar() == 'N') 'N' else 'M' // Simple N/S logic for forced
+        } else {
+            utmLetterDesignator(lat)
+        }
+        
+        // 3. Central Meridian for the target zone
+        // Zone 1 is at -177 (180W to 174W), CM is -177
+        // Formula: -180 + (Zone * 6) - 3
+        val centralMeridian = -180.0 + (zone * 6.0) - 3.0
+        
         val a = 6378137.0          // WGS84 semi-major axis
         val f = 1 / 298.257223563  // WGS84 flattening
         val e2 = 2 * f - f * f     // first eccentricity squared
@@ -39,14 +62,12 @@ object CoordinateUtils {
 
         val latRad = Math.toRadians(lat)
         val lngRad = Math.toRadians(lng)
-
-        val lngOrigin = (zone - 1) * 6 - 180 + 3  // central meridian
-        val lngOriginRad = Math.toRadians(lngOrigin.toDouble())
+        val cmRad = Math.toRadians(centralMeridian)
 
         val N = a / sqrt(1 - e2 * sin(latRad).pow(2))
         val T = tan(latRad).pow(2)
         val C = ep2 * cos(latRad).pow(2)
-        val A = cos(latRad) * (lngRad - lngOriginRad)
+        val A = cos(latRad) * (lngRad - cmRad)
 
         val M = a * (
                 (1 - e2 / 4 - 3 * e2.pow(2) / 64 - 5 * e2.pow(3) / 256) * latRad
@@ -57,7 +78,7 @@ object CoordinateUtils {
 
         val k0 = 0.9996
 
-        var easting = k0 * N * (
+        val easting = k0 * N * (
                 A + (1 - T + C) * A.pow(3) / 6
                         + (5 - 18 * T + T.pow(2) + 72 * C - 58 * ep2) * A.pow(5) / 120
                 ) + 500000.0
@@ -69,8 +90,16 @@ object CoordinateUtils {
                 )
                 )
 
-        if (lat < 0) {
-            northing += 10000000.0  // offset for southern hemisphere
+        // 4. False Northing for Southern Hemisphere
+        // Logic: If user forced 'S', apply offset. If not forced, check lat < 0.
+        val isSouth = if (forceHemisphere != null) {
+            forceHemisphere.uppercaseChar() == 'S'
+        } else {
+            lat < 0
+        }
+
+        if (isSouth) {
+            northing += 10000000.0
         }
 
         return UtmCoordinate(zone, letter, easting, northing)

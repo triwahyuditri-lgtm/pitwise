@@ -55,6 +55,11 @@ import com.example.pitwise.ui.theme.PitwisePrimary
 import com.example.pitwise.ui.theme.PitwiseSurface
 
 import com.example.pitwise.ui.components.AboutDialog
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import com.example.pitwise.BuildConfig
+import com.example.pitwise.domain.debug.DebugManager
+import androidx.compose.ui.graphics.Color
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,6 +73,7 @@ fun SettingsScreen(
     val role = uiState.session?.role ?: "GUEST"
     var gpsInterval by remember { mutableFloatStateOf(5f) }
     var showAboutDialog by remember { androidx.compose.runtime.mutableStateOf(false) }
+    val debugEnabled by DebugManager.debugEnabled.collectAsState()
 
     Scaffold(
         topBar = {
@@ -209,6 +215,44 @@ fun SettingsScreen(
             )
 
             Spacer(modifier = Modifier.height(24.dp))
+
+            // Section: Developer Options (Debug Only)
+            if (BuildConfig.DEBUG) {
+                SectionHeader("DEVELOPER OPTIONS")
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(PitwiseSurface)
+                        .border(1.dp, PitwiseBorder, RoundedCornerShape(12.dp))
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Build, null, tint = Color.Red, modifier = Modifier.size(22.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = "Show Debug Overlay", 
+                            style = MaterialTheme.typography.titleSmall, 
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    Switch(
+                        checked = debugEnabled,
+                        onCheckedChange = { DebugManager.setDebugEnabled(it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = Color.Red,
+                            uncheckedThumbColor = PitwiseGray400,
+                            uncheckedTrackColor = PitwiseSurface
+                        )
+                    )
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+            }
         }
 
         if (showAboutDialog) {

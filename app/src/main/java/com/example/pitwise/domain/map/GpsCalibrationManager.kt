@@ -35,8 +35,7 @@ class GpsCalibrationManager @Inject constructor(
         private val KEY_ORIGIN_LAT = doublePreferencesKey("cal_origin_lat")
         private val KEY_ORIGIN_LNG = doublePreferencesKey("cal_origin_lng")
 
-        // Approximate meters per degree at equator
-        private const val METERS_PER_DEG_LAT = 111320.0
+
     }
 
     data class CalibrationData(
@@ -77,8 +76,10 @@ class GpsCalibrationManager @Inject constructor(
      * Calibrate using a single point (translation only, no rotation).
      */
     suspend fun calibrateSinglePoint(point: CalibrationPoint) {
-        val meterX = (point.lng - point.lat) * METERS_PER_DEG_LAT * cos(Math.toRadians(point.lat))
-        val meterY = point.lat * METERS_PER_DEG_LAT
+        // Convert GPS to UTM (Projected)
+        val utm = CoordinateUtils.latLngToUtm(point.lat, point.lng)
+        val meterX = utm.easting
+        val meterY = utm.northing
 
         val offsetX = point.localX - meterX
         val offsetY = point.localY - meterY
@@ -97,12 +98,14 @@ class GpsCalibrationManager @Inject constructor(
      * Calibrate using two points (translation + rotation + scale).
      */
     suspend fun calibrateTwoPoints(p1: CalibrationPoint, p2: CalibrationPoint) {
-        // Convert GPS to meters (approximate)
-        val cosLat = cos(Math.toRadians((p1.lat + p2.lat) / 2.0))
-        val gpsX1 = p1.lng * METERS_PER_DEG_LAT * cosLat
-        val gpsY1 = p1.lat * METERS_PER_DEG_LAT
-        val gpsX2 = p2.lng * METERS_PER_DEG_LAT * cosLat
-        val gpsY2 = p2.lat * METERS_PER_DEG_LAT
+        // Convert GPS to UTM (Projected)
+        val u1 = CoordinateUtils.latLngToUtm(p1.lat, p1.lng)
+        val u2 = CoordinateUtils.latLngToUtm(p2.lat, p2.lng)
+        
+        val gpsX1 = u1.easting
+        val gpsY1 = u1.northing
+        val gpsX2 = u2.easting
+        val gpsY2 = u2.northing
 
         val gpsDx = gpsX2 - gpsX1
         val gpsDy = gpsY2 - gpsY1
@@ -118,10 +121,21 @@ class GpsCalibrationManager @Inject constructor(
         val scale = if (gpsDist > 0.001) localDist / gpsDist else 1.0
 
         // Compute offset using P1 as reference
+        // Transform P1 (UTM) -> Rotated/Scaled -> Check difference with Local P1
         val transformedX = (gpsX1 * scale * cos(rotation)) - (gpsY1 * scale * sin(rotation))
         val transformedY = (gpsX1 * scale * sin(rotation)) + (gpsY1 * scale * cos(rotation))
-        val offsetX = p1.localX - transformedX
-        val offsetY = p1.localY - transformedY
+        
+        // This math was slightly wrong in previous version (rotation matrix application).
+        // Correct affine transform:
+        // x' = x*s*cos(r) - y*s*sin(r) + tx
+        // y' = x*s*sin(r) + y*s*cos(r) + ty
+        // So tx = localX - (x*s*cos(r) - y*s*sin(r))
+        
+        val term1 = (gpsX1 * scale * cos(rotation)) - (gpsY1 * scale * sin(rotation))
+        val term2 = (gpsX1 * scale * sin(rotation)) + (gpsY1 * scale * cos(rotation))
+        
+        val offsetX = p1.localX - term1
+        val offsetY = p1.localY - term2
 
         context.calibrationDataStore.edit { prefs ->
             prefs[KEY_OFFSET_X] = offsetX
@@ -137,18 +151,20 @@ class GpsCalibrationManager @Inject constructor(
      * Transform a WGS84 lat/lng to local grid coordinates using current calibration.
      */
     fun transformToLocal(lat: Double, lng: Double, calibration: CalibrationData): Pair<Double, Double> {
+        val utm = CoordinateUtils.latLngToUtm(lat, lng)
+        
         if (!calibration.isCalibrated) {
-            // No calibration — default to UTM coordinates (Standard for DXF maps)
-            val utm = CoordinateUtils.latLngToUtm(lat, lng)
+            // No calibration — default to raw UTM coordinates
             return Pair(utm.easting, utm.northing)
         }
 
-        val cosLat = cos(Math.toRadians(lat))
-        val meterX = lng * METERS_PER_DEG_LAT * cosLat
-        val meterY = lat * METERS_PER_DEG_LAT
+        val meterX = utm.easting
+        val meterY = utm.northing
 
         val s = calibration.scale
         val r = calibration.rotation
+        
+        // Apply affine transform
         val localX = (meterX * s * cos(r)) - (meterY * s * sin(r)) + calibration.offsetX
         val localY = (meterX * s * sin(r)) + (meterY * s * cos(r)) + calibration.offsetY
 

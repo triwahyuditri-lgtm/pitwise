@@ -6,8 +6,8 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.pitwise.data.local.entity.MapAnnotation
-import com.example.pitwise.domain.map.DxfFile
-import com.example.pitwise.domain.map.DxfParser
+import com.example.pitwise.domain.dxf.DxfModel
+import com.example.pitwise.domain.dxf.DxfParser
 import com.example.pitwise.domain.map.MapPoint
 import com.example.pitwise.domain.map.MapRepository
 import com.example.pitwise.domain.map.PdfRendererEngine
@@ -38,7 +38,7 @@ data class MeasureUiState(
     
     // Map Background
     val pdfBitmap: Bitmap? = null,
-    val dxfFile: DxfFile? = null,
+    val dxfModel: DxfModel? = null,
     val isLoadingMap: Boolean = false
 )
 
@@ -67,7 +67,7 @@ class MeasureViewModel @Inject constructor(
                 if (mapEntry != null) {
                     loadMapContent(mapEntry.uri, mapEntry.type)
                 } else {
-                    _uiState.value = _uiState.value.copy(pdfBitmap = null, dxfFile = null)
+                    _uiState.value = _uiState.value.copy(pdfBitmap = null, dxfModel = null)
                 }
             }
         }
@@ -79,12 +79,12 @@ class MeasureViewModel @Inject constructor(
             val uri = Uri.parse(uriString)
             if (type == "PDF") {
                 val data = pdfRenderer.renderFirstPage(uri)
-                _uiState.value = _uiState.value.copy(pdfBitmap = data?.bitmap, dxfFile = null, isLoadingMap = false)
+                _uiState.value = _uiState.value.copy(pdfBitmap = data?.bitmap, dxfModel = null, isLoadingMap = false)
             } else if (type == "DXF") {
                 val content = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
                 if (content != null) {
                     val dxf = dxfParser.parse(content)
-                    _uiState.value = _uiState.value.copy(dxfFile = dxf, pdfBitmap = null, isLoadingMap = false)
+                    _uiState.value = _uiState.value.copy(dxfModel = dxf, pdfBitmap = null, isLoadingMap = false)
                 }
             }
         } catch (e: Exception) {

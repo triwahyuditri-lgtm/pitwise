@@ -1,5 +1,6 @@
 package com.example.pitwise.domain.map
 
+import android.util.Log
 import androidx.compose.ui.geometry.Offset
 
 /**
@@ -108,7 +109,10 @@ class MapTransformEngine {
         val worldW = (maxX - minX).toFloat()
         val worldH = (maxY - minY).toFloat()
 
-        if (worldW <= 0f || worldH <= 0f || canvasW <= 0f || canvasH <= 0f) return
+        if (worldW <= 0f || worldH <= 0f || canvasW <= 0f || canvasH <= 0f) {
+            Log.w(TAG, "zoomAll: invalid dimensions worldW=$worldW worldH=$worldH canvasW=$canvasW canvasH=$canvasH")
+            return
+        }
 
         val padding = ZOOM_ALL_PADDING
         val availW = canvasW - padding * 2
@@ -126,6 +130,9 @@ class MapTransformEngine {
         } else {
             canvasH / 2f - centerWorldY * scale
         }
+
+        Log.d(TAG, "zoomAll: scale=$scale offsetX=$offsetX offsetY=$offsetY " +
+            "bounds=[$minX..$maxX, $minY..$maxY] canvas=${canvasW}x${canvasH}")
     }
 
     /**
@@ -144,7 +151,8 @@ class MapTransformEngine {
     }
 
     companion object {
-        const val MIN_SCALE = 0.5f
+        private const val TAG = "DXF_TRANSFORM"
+        const val MIN_SCALE = 1e-7f
         const val MAX_SCALE = 20f
         const val ZOOM_ALL_PADDING = 40f
         const val DOUBLE_TAP_ZOOM_FACTOR = 1.5f

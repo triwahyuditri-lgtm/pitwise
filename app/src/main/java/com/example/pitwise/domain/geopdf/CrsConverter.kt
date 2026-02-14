@@ -39,7 +39,15 @@ class CrsConverter private constructor(
      * UTM conversion using existing CoordinateUtils (pure math, no proj4j dependency).
      */
     private fun convertUtm(lat: Double, lng: Double): WorldPoint {
-        val utm = CoordinateUtils.latLngToUtm(lat, lng)
+        // FIX: Force use of metadata zone if available.
+        // This prevents coordinates jumping when GPS crosses a zone line
+        // but the map is fixed to a single zone.
+        val forcedZone = projectionInfo.utmZone
+        val forcedHemisphere = if (projectionInfo.isNorthernHemisphere == true) 'N' 
+                              else if (projectionInfo.isNorthernHemisphere == false) 'S' 
+                              else null
+
+        val utm = CoordinateUtils.latLngToUtm(lat, lng, forcedZone, forcedHemisphere)
         return WorldPoint(utm.easting, utm.northing)
     }
 

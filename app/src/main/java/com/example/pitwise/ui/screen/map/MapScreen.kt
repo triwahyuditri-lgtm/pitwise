@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -80,10 +81,12 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.pitwise.domain.map.MapMode
+import com.example.pitwise.domain.map.MapTransformEngine
 import com.example.pitwise.domain.map.MeasureSubMode
 import com.example.pitwise.ui.theme.PitwiseBorder
 import com.example.pitwise.ui.theme.PitwiseGray400
 import com.example.pitwise.ui.theme.PitwisePrimary
+import com.example.pitwise.domain.geopdf.GeoPdfDebugInfo
 import com.example.pitwise.ui.theme.PitwiseSurface
 
 // ════════════════════════════════════════════════════
@@ -102,27 +105,6 @@ fun MapScreen(
 
     // Permission denied state
     var permissionDenied by remember { mutableStateOf(false) }
-
-    // Zoom All on trigger
-    LaunchedEffect(uiState.zoomAllTrigger) {
-        if (uiState.zoomAllTrigger > 0 && uiState.canvasWidth > 0f) {
-            viewModel.executeZoomAll()
-        }
-    }
-
-    // Center on GPS trigger
-    LaunchedEffect(uiState.centerOnGpsTrigger) {
-        if (uiState.centerOnGpsTrigger > 0) {
-            val gpsX = uiState.gpsLocalX
-            val gpsY = uiState.gpsLocalY
-            if (gpsX != null && gpsY != null) {
-                val target = viewModel.transformEngine.worldToScreen(gpsX, gpsY)
-                val dx = uiState.canvasWidth / 2f - target.x
-                val dy = uiState.canvasHeight / 2f - target.y
-                viewModel.onPan(dx, dy)
-            }
-        }
-    }
 
     // Mode badge color
     val modeColor = when (uiState.currentMode) {
@@ -271,33 +253,129 @@ fun MapScreen(
                 }
             }
 
+            // ── Local Transform State (Hardware Acceleration Friendly) ──
+            var scale by remember { mutableStateOf(1f) }
+            var offsetX by remember { mutableStateOf(0f) }
+            var offsetY by remember { mutableStateOf(0f) }
+
+            // Sync ViewModel initial state or "Zoom All" triggers
+            // Sync ViewModel state triggers (e.g. Zoom All or Initial Load)
+            // We compare only if the ViewModel state explicitly changes (triggers)
+            // But since we decoupled, uiState.scale/offset ONLY changes when ViewModel wants to force a view (ZoomAll).
+            // So we can safely apply it.
+            LaunchedEffect(uiState.scale, uiState.offsetX, uiState.offsetY) {
+                // Determine if this is a "force update" from ViewModel.
+                // Since we don't push local state TO ViewModel, any change in uiState.scale/offset
+                // MUST be an external command (load, zoom all).
+                // However, we must ensure we don't reset if uiState is just "default" and we have panned.
+                // But uiState doesn't change unless we call update.
+                // Note: initialization gives 1f, 0f, 0f.
+                // If we pan, local becomes 1.1, 10, 10. uiState stays 1f, 0f, 0f.
+                // LaunchedEffect DOES NOT run.
+                // If we triggers Zoom All -> uiState becomes 0.5, 100, 100.
+                // LaunchedEffect runs. We update local. Correct.
+                
+                // One edge case: If Zoom All result HAPPENS to match previous uiState?
+                // Then LaunchedEffect won't run. But that's fine, we are already there? 
+                // No, local state might be different. 
+                // But Zoom All usually changes state.
+                
+                // To be safe, we rely on the fact that uiState ONLY changes on events.
+                if (uiState.scale != scale || uiState.offsetX != offsetX || uiState.offsetY != offsetY) {
+                     scale = uiState.scale
+                     offsetX = uiState.offsetX
+                     offsetY = uiState.offsetY
+                }
+            }
+
+            // Zoom All on trigger
+            // Zoom All on trigger or when canvas size becomes available for the first time
+            LaunchedEffect(uiState.zoomAllTrigger, uiState.canvasWidth, uiState.canvasHeight) {
+                if (uiState.zoomAllTrigger > 0 && uiState.canvasWidth > 0f && uiState.canvasHeight > 0f) {
+                    viewModel.executeZoomAll()
+                }
+            }
+
+            // Center on GPS trigger
+            LaunchedEffect(uiState.centerOnGpsTrigger) {
+                if (uiState.centerOnGpsTrigger > 0) {
+                    val gpsX = uiState.gpsLocalX
+                    val gpsY = uiState.gpsLocalY
+                    if (gpsX != null && gpsY != null) {
+                        // Calculate target screen position for GPS point using LOCAL state
+                        // We want GPS to be at center (width/2, height/2)
+                        // Current screen pos of GPS:
+                        // screenX = (gpsX * scale) + offsetX
+                        // screenY = (gpsY * scale) + offsetY (assuming no flipY or handled)
+                        
+                        // We want newOffsetX such that:
+                        // center.x = (gpsX * scale) + newOffsetX
+                        // newOffsetX = center.x - (gpsX * scale)
+                        
+                        // Handling flipY:
+                        val isFlipY = viewModel.transformEngine.flipY
+                        val vy = if (isFlipY) -gpsY else gpsY
+                        
+                        val targetScale = scale // Keep current zoom
+                        
+                        val cx = uiState.canvasWidth / 2f
+                        val cy = uiState.canvasHeight / 2f
+                        
+                        offsetX = cx - (gpsX.toFloat() * targetScale)
+                        offsetY = cy - (vy.toFloat() * targetScale)
+                        
+                        // Note: We update local state directly. We do NOT call viewModel.onPan.
+                    }
+                }
+            }
+
             // ── Map Canvas with gesture handling ──
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    // Transform gestures: pinch zoom with focal point + pan
                     .pointerInput(Unit) {
                         detectTransformGestures { centroid, pan, zoom, _ ->
-                            viewModel.onZoom(zoom, centroid.x, centroid.y)
-                            viewModel.onPan(pan.x, pan.y)
+                            val oldScale = scale
+                            val newScale = (scale * zoom).coerceIn(MapTransformEngine.MIN_SCALE, MapTransformEngine.MAX_SCALE)
+                            val scaleChange = newScale / oldScale
+
+                            // Zoom around centroid
+                            offsetX = centroid.x - (centroid.x - offsetX) * scaleChange + pan.x
+                            offsetY = centroid.y - (centroid.y - offsetY) * scaleChange + pan.y
+                            scale = newScale
+
+                            // Update ViewModel *lazily* or on gesture end if needed,
+                            // but for now we keep it local for performance.
+                            // If we need coordinate updates, we calculate them using local state.
                         }
                     }
-                    // Tap gestures: single tap for map interaction, double-tap for zoom
                     .pointerInput(uiState.currentMode) {
                         detectTapGestures(
                             onTap = { tapOffset ->
-                                viewModel.onMapTap(tapOffset.x, tapOffset.y)
+                                // Convert to World Coordinates locally
+                                val wx = (tapOffset.x - offsetX) / scale
+                                val rawY = (tapOffset.y - offsetY) / scale
+                                val wy = if (viewModel.transformEngine.flipY) -rawY else rawY
+                                viewModel.onMapTap(worldX = wx.toDouble(), worldY = wy.toDouble())
                             },
                             onDoubleTap = { tapOffset ->
-                                viewModel.onDoubleTapZoom(tapOffset.x, tapOffset.y)
+                                val zoomFactor = 1.5f
+                                val newScale = (scale * zoomFactor).coerceIn(MapTransformEngine.MIN_SCALE, MapTransformEngine.MAX_SCALE)
+                                val scaleChange = newScale / scale
+                                offsetX = tapOffset.x - (tapOffset.x - offsetX) * scaleChange
+                                offsetY = tapOffset.y - (tapOffset.y - offsetY) * scaleChange
+                                scale = newScale
                             }
                         )
                     }
             ) {
                 MapRenderer(
-                    transformEngine = viewModel.transformEngine,
+                    modifier = Modifier.fillMaxSize(),
+                    scale = scale,
+                    offsetX = offsetX,
+                    offsetY = offsetY,
                     pdfBitmap = uiState.pdfBitmap,
-                    dxfFile = uiState.dxfFile,
+                    dxfModel = uiState.dxfModel,
                     showPdfLayer = uiState.showPdfLayer,
                     showDxfLayer = uiState.showDxfLayer,
                     showGpsLayer = uiState.showGpsLayer,
@@ -309,7 +387,21 @@ fun MapScreen(
                     gpsPosition = if (uiState.gpsLocalX != null && uiState.gpsLocalY != null) {
                         Pair(uiState.gpsLocalX!!, uiState.gpsLocalY!!)
                     } else null,
-                    gpsAccuracy = uiState.gpsAccuracy
+                    gpsHeading = uiState.gpsHeading,
+                    gpsAccuracy = uiState.gpsAccuracy,
+                    flipY = viewModel.transformEngine.flipY,
+                    isSnapped = uiState.isSnapped
+                )
+            }
+
+            // ── Debug Overlay ──
+            // ── Debug Overlay ──
+            if (com.example.pitwise.domain.debug.DebugManager.shouldShowDebugOverlay()) {
+                MapDebugOverlay(
+                    info = uiState.geoPdfDebugInfo,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(top = 80.dp, start = 16.dp)
                 )
             }
 
@@ -494,16 +586,36 @@ fun MapScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.Place, null, tint = Color(0xFFFF5722), modifier = Modifier.size(20.dp))
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Place, null, tint = Color(0xFFFF5722), modifier = Modifier.size(24.dp))
+                            if (uiState.isSnapped) {
+                                Box(
+                                    modifier = Modifier
+                                        .matchParentSize()
+                                        .background(Color(0xFF4CAF50).copy(alpha = 0.3f), CircleShape)
+                                )
+                            }
+                        }
                         Column {
-                            Text(
-                                "X: ${"%.2f".format(marker.x)}  Y: ${"%.2f".format(marker.y)}",
-                                color = Color.White,
-                                style = MaterialTheme.typography.bodySmall
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(
+                                    "X: ${"%.3f".format(marker.x)}  Y: ${"%.3f".format(marker.y)}",
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                if (uiState.isSnapped) {
+                                  Box(
+                                      modifier = Modifier
+                                          .background(Color(0xFF4CAF50), RoundedCornerShape(4.dp))
+                                          .padding(horizontal = 4.dp, vertical = 1.dp)
+                                  ) {
+                                      Text("SNAPPED", fontSize = 9.sp, color = Color.Black, fontWeight = FontWeight.Bold)
+                                  }
+                                }
+                            }
                             if (marker.z != null) {
                                 Text(
-                                    "Elevasi: ${"%.2f".format(marker.z)} m",
+                                    "Z: ${"%.3f".format(marker.z)}",
                                     color = Color(0xFFFF5722),
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold
@@ -524,7 +636,7 @@ fun MapScreen(
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = 120.dp),
+                    .padding(end = 16.dp, bottom = 140.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // GPS Center
@@ -553,7 +665,7 @@ fun MapScreen(
                 },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 48.dp)
+                    .padding(bottom = 60.dp)
             )
 
             // ── Coordinate Bar (very bottom) ──
@@ -623,18 +735,18 @@ private fun ModeToolbar(
     Column(
         modifier = modifier
             .padding(horizontal = 16.dp)
-            .fillMaxWidth()
+            .wrapContentWidth()
             .background(PitwiseSurface, RoundedCornerShape(16.dp))
             .border(1.dp, PitwiseBorder, RoundedCornerShape(16.dp))
-            .padding(12.dp),
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // ── Active drawing actions (Undo/Finish/Cancel) ──
         val isActiveDrawing = (currentMode == MapMode.PLOT || currentMode == MapMode.MEASURE) && pointCount > 0
         if (isActiveDrawing) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
+                modifier = Modifier.wrapContentWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onUndo, modifier = Modifier.size(40.dp)) {
@@ -679,8 +791,8 @@ private fun ModeToolbar(
 
         // ── Mode buttons ──
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
+            modifier = Modifier.wrapContentWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             ModeButton(
@@ -715,6 +827,10 @@ private fun ModeToolbar(
     }
 }
 
+// ════════════════════════════════════════════════════
+// Components
+// ════════════════════════════════════════════════════
+
 @Composable
 private fun ModeButton(
     icon: ImageVector,
@@ -726,20 +842,26 @@ private fun ModeButton(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
-            .clickable { onClick() }
-            .background(
-                if (isActive) activeColor.copy(alpha = 0.15f) else Color.Transparent,
-                RoundedCornerShape(12.dp)
-            )
-            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(6.dp)
     ) {
-        Icon(
-            icon, label,
-            tint = if (isActive) activeColor else PitwiseGray400,
-            modifier = Modifier.size(24.dp)
-        )
-        Spacer(modifier = Modifier.height(4.dp))
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .background(
+                    if (isActive) activeColor.copy(alpha = 0.2f) else Color.Transparent,
+                    CircleShape
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                icon,
+                label,
+                tint = if (isActive) activeColor else PitwiseGray400,
+                modifier = Modifier.size(20.dp)
+            )
+        }
         Text(
             label,
             style = MaterialTheme.typography.labelSmall,
@@ -757,30 +879,31 @@ private fun MeasureSubModeButton(
     onClick: () -> Unit
 ) {
     Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
         modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .clickable { onClick() }
+            .clip(RoundedCornerShape(20.dp))
             .background(
-                if (isActive) Color(0xFFFFEB3B).copy(alpha = 0.15f) else Color.Transparent,
-                RoundedCornerShape(8.dp)
+                if (isActive) Color(0xFFFFEB3B).copy(alpha = 0.2f) else Color.Transparent,
+                RoundedCornerShape(20.dp)
             )
             .border(
                 1.dp,
-                if (isActive) Color(0xFFFFEB3B).copy(alpha = 0.3f) else PitwiseBorder,
-                RoundedCornerShape(8.dp)
+                if (isActive) Color(0xFFFFEB3B).copy(alpha = 0.5f) else PitwiseBorder,
+                RoundedCornerShape(20.dp)
             )
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 6.dp)
     ) {
         Icon(
-            icon, label,
+            icon,
+            null,
             tint = if (isActive) Color(0xFFFFEB3B) else PitwiseGray400,
             modifier = Modifier.size(16.dp)
         )
         Text(
             label,
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelMedium,
             color = if (isActive) Color(0xFFFFEB3B) else PitwiseGray400,
             fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
         )

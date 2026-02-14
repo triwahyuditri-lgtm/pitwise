@@ -1,5 +1,7 @@
 package com.example.pitwise.domain.map
 
+import com.example.pitwise.domain.dxf.DxfEntity
+import com.example.pitwise.domain.dxf.DxfParser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -41,15 +43,15 @@ class DxfParserTest {
         """.trimIndent()
 
         val result = parser.parse(dxf)
-        assertEquals(1, result.entities.size)
+        assertEquals(1, result.lines.size)
 
-        val line = result.entities[0] as DxfEntity.Line
-        assertEquals(100.0, line.x1, 0.001)
-        assertEquals(200.0, line.y1, 0.001)
-        assertEquals(50.5, line.z1, 0.001)
-        assertEquals(300.0, line.x2, 0.001)
-        assertEquals(400.0, line.y2, 0.001)
-        assertEquals(75.3, line.z2, 0.001)
+        val line = result.lines[0]
+        assertEquals(100.0, line.start.x, 0.001)
+        assertEquals(200.0, line.start.y, 0.001)
+        assertEquals(50.5, line.start.z, 0.001)
+        assertEquals(300.0, line.end.x, 0.001)
+        assertEquals(400.0, line.end.y, 0.001)
+        assertEquals(75.3, line.end.z, 0.001)
     }
 
     @Test
@@ -74,9 +76,9 @@ class DxfParserTest {
         """.trimIndent()
 
         val result = parser.parse(dxf)
-        val line = result.entities[0] as DxfEntity.Line
-        assertEquals(0.0, line.z1, 0.001)
-        assertEquals(0.0, line.z2, 0.001)
+        val line = result.lines[0]
+        assertEquals(0.0, line.start.z, 0.001)
+        assertEquals(0.0, line.end.z, 0.001)
     }
 
     @Test
@@ -99,7 +101,8 @@ class DxfParserTest {
         """.trimIndent()
 
         val result = parser.parse(dxf)
-        val point = result.entities[0] as DxfEntity.Point
+        assertEquals(1, result.points.size)
+        val point = result.points[0]
         assertEquals(50.0, point.x, 0.001)
         assertEquals(60.0, point.y, 0.001)
         assertEquals(42.5, point.z, 0.001)
@@ -131,7 +134,8 @@ class DxfParserTest {
         """.trimIndent()
 
         val result = parser.parse(dxf)
-        val poly = result.entities[0] as DxfEntity.Polyline
+        assertEquals(1, result.polylines.size)
+        val poly = result.polylines[0]
         assertEquals(2, poly.vertices.size)
         // All vertices should inherit the elevation
         assertEquals(100.0, poly.vertices[0].z, 0.001)
@@ -172,7 +176,8 @@ class DxfParserTest {
         """.trimIndent()
 
         val result = parser.parse(dxf)
-        val poly = result.entities[0] as DxfEntity.Polyline
+        assertEquals(1, result.polylines.size)
+        val poly = result.polylines[0]
         assertEquals(2, poly.vertices.size)
         assertEquals(30.0, poly.vertices[0].z, 0.001)
         assertEquals(60.0, poly.vertices[1].z, 0.001)
@@ -210,7 +215,8 @@ class DxfParserTest {
         """.trimIndent()
 
         val result = parser.parse(dxf)
-        val poly = result.entities[0] as DxfEntity.Polyline
+        assertEquals(1, result.polylines.size)
+        val poly = result.polylines[0]
         assertEquals(99.0, poly.vertices[0].z, 0.001)
         assertEquals(99.0, poly.vertices[1].z, 0.001)
     }
@@ -243,8 +249,8 @@ class DxfParserTest {
         """.trimIndent()
 
         val result = parser.parse(dxf)
-        assertEquals(10.0, result.minZ, 0.001)
-        assertEquals(50.0, result.maxZ, 0.001)
+        assertEquals(10.0, result.bounds.minZ, 0.001)
+        assertEquals(50.0, result.bounds.maxZ, 0.001)
     }
 
     @Test
@@ -293,13 +299,12 @@ class DxfParserTest {
         """.trimIndent()
 
         val result = parser.parse(dxf)
-        assertEquals(3, result.entities.size)
-        assertTrue(result.entities[0] is DxfEntity.Point)
-        assertTrue(result.entities[1] is DxfEntity.Line)
-        assertTrue(result.entities[2] is DxfEntity.Polyline)
+        assertEquals(1, result.points.size)
+        assertEquals(1, result.lines.size)
+        assertEquals(1, result.polylines.size)
 
-        val poly = result.entities[2] as DxfEntity.Polyline
-        assertTrue(poly.closed)
+        val poly = result.polylines[0]
+        assertTrue(poly.isClosed)
     }
 
     @Test
@@ -314,8 +319,84 @@ class DxfParserTest {
         """.trimIndent()
 
         val result = parser.parse(dxf)
-        assertTrue(result.entities.isEmpty())
-        assertEquals(0.0, result.minX, 0.001)
-        assertEquals(0.0, result.minZ, 0.001)
+        assertTrue(result.lines.isEmpty())
+        assertTrue(result.polylines.isEmpty())
+        assertTrue(result.points.isEmpty())
+        assertEquals(0.0, result.bounds.minX, 0.001)
+        assertEquals(0.0, result.bounds.minZ, 0.001)
+    }
+
+    @Test
+    fun `parse LWPOLYLINE with per-vertex Z code 30 after code 20`() {
+        // This tests the deferred vertex assembly fix:
+        // DXF files may have code 30 (Z) after code 20 (Y)
+        val dxf = """
+            0
+            SECTION
+            2
+            ENTITIES
+            0
+            LWPOLYLINE
+            70
+            0
+            10
+            100.0
+            20
+            200.0
+            30
+            50.5
+            10
+            300.0
+            20
+            400.0
+            30
+            75.3
+            0
+            ENDSEC
+        """.trimIndent()
+
+        val result = parser.parse(dxf)
+        assertEquals(1, result.polylines.size)
+        val poly = result.polylines[0]
+        assertEquals(2, poly.vertices.size)
+        // Each vertex should have its own Z value
+        assertEquals(50.5, poly.vertices[0].z, 0.001)
+        assertEquals(75.3, poly.vertices[1].z, 0.001)
+    }
+
+    @Test
+    fun `parse LWPOLYLINE with Z before Y still works`() {
+        // Ensure normal ordering (10, 30, 20) also works
+        val dxf = """
+            0
+            SECTION
+            2
+            ENTITIES
+            0
+            LWPOLYLINE
+            70
+            0
+            10
+            1.0
+            30
+            10.0
+            20
+            2.0
+            10
+            3.0
+            30
+            20.0
+            20
+            4.0
+            0
+            ENDSEC
+        """.trimIndent()
+
+        val result = parser.parse(dxf)
+        assertEquals(1, result.polylines.size)
+        val poly = result.polylines[0]
+        assertEquals(2, poly.vertices.size)
+        assertEquals(10.0, poly.vertices[0].z, 0.001)
+        assertEquals(20.0, poly.vertices[1].z, 0.001)
     }
 }

@@ -13,9 +13,9 @@ import com.example.pitwise.data.local.entity.MapAnnotation
 import com.example.pitwise.data.local.entity.MapEntry
 import com.example.pitwise.domain.map.CoordinateFormat
 import com.example.pitwise.domain.map.CoordinateUtils
-import com.example.pitwise.domain.map.DxfEntity
-import com.example.pitwise.domain.map.DxfFile
-import com.example.pitwise.domain.map.DxfParser
+import com.example.pitwise.domain.dxf.DxfEntity
+import com.example.pitwise.domain.dxf.DxfModel
+import com.example.pitwise.domain.dxf.DxfParser
 import com.example.pitwise.domain.map.GpsCalibrationManager
 import com.example.pitwise.domain.map.LiveMeasurement
 import com.example.pitwise.domain.map.MapMode
@@ -27,9 +27,11 @@ import com.example.pitwise.domain.map.MapTransformEngine
 import com.example.pitwise.domain.map.MapVertex
 import com.example.pitwise.domain.map.MeasureSubMode
 import com.example.pitwise.domain.map.PdfRendererEngine
+import com.example.pitwise.domain.transform.ScreenToWorldTransform 
 import com.example.pitwise.domain.geopdf.GeoPdfDebugInfo
 import com.example.pitwise.domain.geopdf.GeoPdfRepository
 import com.example.pitwise.domain.geopdf.GeoPdfValidationResult
+import com.example.pitwise.domain.sensor.HeadingSensorManager
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
@@ -45,6 +47,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import kotlin.math.sqrt
+import android.util.Log
 
 // ════════════════════════════════════════════════════
 // UI State
@@ -53,7 +56,7 @@ import kotlin.math.sqrt
 data class MapUiState(
     // Map source data
     val mapEntry: MapEntry? = null,
-    val dxfFile: DxfFile? = null,
+    val dxfModel: DxfModel? = null,
     val pdfBitmap: Bitmap? = null,
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
@@ -82,6 +85,7 @@ data class MapUiState(
     val gpsLng: Double? = null,
     val gpsLocalX: Double? = null,
     val gpsLocalY: Double? = null,
+    val gpsHeading: Float = 0f,
     val gpsAccuracy: Float? = null,
     val isGpsTracking: Boolean = false,
     val permissionDenied: Boolean = false,
@@ -111,7 +115,10 @@ data class MapUiState(
 
     // GeoPDF
     val isGeoPdf: Boolean = false,
-    val geoPdfDebugInfo: GeoPdfDebugInfo? = null
+    val geoPdfDebugInfo: GeoPdfDebugInfo? = null,
+
+    // Snap State
+    val isSnapped: Boolean = false
 )
 
 // ════════════════════════════════════════════════════
@@ -126,6 +133,7 @@ class MapViewModel @Inject constructor(
     private val pdfRenderer: PdfRendererEngine,
     private val gpsCalibrationManager: GpsCalibrationManager,
     private val geoPdfRepository: GeoPdfRepository,
+    private val headingSensorManager: HeadingSensorManager,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -137,6 +145,9 @@ class MapViewModel @Inject constructor(
     // ── Engines ──
     val transformEngine = MapTransformEngine()
     private val modeController = MapModeController()
+    private val snapEngine = com.example.pitwise.domain.snap.SnapEngine(
+        com.example.pitwise.domain.snap.GridSpatialIndex()
+    )
 
     private var locationCallback: LocationCallback? = null
 
@@ -146,6 +157,16 @@ class MapViewModel @Inject constructor(
             loadAnnotations(mapId)
         }
         startGpsTracking()
+        startHeadingTracking()
+    }
+
+    private fun startHeadingTracking() {
+        headingSensorManager.startListening()
+        viewModelScope.launch {
+            headingSensorManager.heading.collectLatest { heading ->
+                _uiState.value = _uiState.value.copy(gpsHeading = heading)
+            }
+        }
     }
 
     override fun onCleared() {
@@ -156,6 +177,7 @@ class MapViewModel @Inject constructor(
                     .removeLocationUpdates(it)
             } catch (_: Exception) {}
         }
+        headingSensorManager.stopListening()
     }
 
     // ════════════════════════════════════════════════════
@@ -207,10 +229,42 @@ class MapViewModel @Inject constructor(
                 ?.bufferedReader()?.readText()
             if (content != null) {
                 val dxf = dxfParser.parse(content)
-                _uiState.value = _uiState.value.copy(
-                    dxfFile = dxf,
-                    isLoading = false
-                )
+                val totalEntities = dxf.lines.size + dxf.polylines.size + dxf.points.size
+                if (totalEntities == 0) {
+                     _uiState.value = _uiState.value.copy(
+                        dxfModel = dxf,
+                        isLoading = false,
+                        errorMessage = "Warning: No entities found in DXF (Version/Format?)"
+                    )
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        dxfModel = dxf,
+                        isLoading = false
+                    )
+                    Log.d(TAG, "DXF parsed: lines=${dxf.lines.size} polylines=${dxf.polylines.size} points=${dxf.points.size} " +
+                        "bounds=[X:${dxf.bounds.minX}..${dxf.bounds.maxX}, Y:${dxf.bounds.minY}..${dxf.bounds.maxY}]")
+                }
+                
+                // Build Snap Index in background
+                viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+                    val vertices = mutableListOf<com.example.pitwise.domain.snap.DxfVertex>()
+                    
+                    dxf.points.forEach { p ->
+                        vertices.add(com.example.pitwise.domain.snap.DxfVertex(p.x, p.y, p.z))
+                    }
+                    dxf.lines.forEach { l ->
+                        vertices.add(com.example.pitwise.domain.snap.DxfVertex(l.start.x, l.start.y, l.start.z))
+                        vertices.add(com.example.pitwise.domain.snap.DxfVertex(l.end.x, l.end.y, l.end.z))
+                    }
+                    dxf.polylines.forEach { p ->
+                        p.vertices.forEach { v ->
+                            vertices.add(com.example.pitwise.domain.snap.DxfVertex(v.x, v.y, v.z))
+                        }
+                    }
+
+                    snapEngine.updateVertices(vertices)
+                }
+
                 // Auto zoom-all after loading
                 triggerZoomAll()
             } else {
@@ -294,14 +348,14 @@ class MapViewModel @Inject constructor(
 
         if (cw <= 0f || ch <= 0f) return
 
-        val dxf = state.dxfFile
+        val dxf = state.dxfModel
         val pdf = state.pdfBitmap
 
         when {
             dxf != null -> {
                 transformEngine.zoomAll(
-                    dxf.minX, dxf.minY,
-                    dxf.maxX, dxf.maxY,
+                    dxf.bounds.minX, dxf.bounds.minY,
+                    dxf.bounds.maxX, dxf.bounds.maxY,
                     cw, ch
                 )
             }
@@ -310,6 +364,7 @@ class MapViewModel @Inject constructor(
             }
         }
         syncTransformState()
+        Log.d(TAG, "executeZoomAll: scale=${transformEngine.scale} offsetX=${transformEngine.offsetX} offsetY=${transformEngine.offsetY}")
     }
 
     private fun syncTransformState() {
@@ -358,37 +413,87 @@ class MapViewModel @Inject constructor(
     // Map Tap Handling
     // ════════════════════════════════════════════════════
 
-    fun onMapTap(screenX: Float, screenY: Float) {
-        val (worldX, worldY) = transformEngine.screenToWorld(screenX, screenY)
-        val z = findNearestZ(worldX, worldY, _uiState.value.dxfFile)
+    fun onMapTap(worldX: Double, worldY: Double) {
+        // Query Snap Engine
+        // We only snap in ID_POINT mode (as requested) or potentially others if useful.
+        
+        var finalX = worldX
+        var finalY = worldY
+        var finalZ: Double? = null
+        var isSnapped = false
+        var isProjected = false
+
+        // 1. GeoPDF Inverse Transform (Priority)
+        // worldX/worldY here are currently "Local" coordinates (PDF Pixels) because
+        // MapRenderer doesn't know about GeoPDF projection yet.
+        // We must convert these Local Pixels -> Projected World (UTM)
+        if (geoPdfRepository.hasValidGeoPdf) {
+            val inverse = geoPdfRepository.inverseMatrix
+            if (inverse != null) {
+                // Apply inverse affine: Pixel -> Projected
+                val (projX, projY) = inverse.map(worldX, worldY)
+                finalX = projX
+                finalY = projY
+                isProjected = true
+                // Note: We don't snap to DXF if we are in GeoPDF mode usually?
+                // Or maybe we overlay DXF on PDF?
+                // If mixed, it's complex. Assuming GeoPDF primary for now.
+            }
+        }
+
+        // 2. DXF Snap (if not GeoPDF or if we support mixed)
+        // If we have DXF model, we might want to snap.
+        // BUT: DxfModel coordinates are usually Local or Projected.
+        // If PDF and DXF are aligned, then DXF coordinates should be in Projected space too?
+        // Or if PDF is background, DXF is overlay.
+        // If we converted tap to Projected, and DXF is in Projected, then snapping works.
+        
+        if (_uiState.value.dxfModel != null) {
+            val snapResult = snapEngine.findVertex(finalX, finalY)
+            if (snapResult != null) {
+                finalX = snapResult.vertex.x
+                finalY = snapResult.vertex.y
+                finalZ = snapResult.vertex.z
+                isSnapped = true
+            }
+        }
+
+        val pointZ = finalZ
+
+        // 3. Update Coordinate Display for the Tap
+        // If we are isProjected, finalX/Y are UTM.
+        // We might want to show them as Lat/Lng in the tooltip if preferred?
+        // Logic below updates uiState.
 
         when (modeController.currentMode) {
             MapMode.VIEW -> {
                 // Show coordinate tooltip
-                modeController.addPoint(worldX, worldY, z)
+                modeController.addPoint(finalX, finalY, pointZ)
                 _uiState.value = _uiState.value.copy(
-                    tapLocalX = worldX,
-                    tapLocalY = worldY,
-                    tapZ = z,
+                    tapLocalX = finalX,
+                    tapLocalY = finalY,
+                    tapZ = pointZ,
                     showTapTooltip = true,
-                    idPointMarker = MapVertex(worldX, worldY, z)
+                    idPointMarker = MapVertex(finalX, finalY, pointZ),
+                    isSnapped = isSnapped
                 )
             }
             MapMode.PLOT -> {
-                modeController.addPoint(worldX, worldY, z)
+                modeController.addPoint(finalX, finalY, pointZ)
                 syncModeState()
             }
             MapMode.MEASURE -> {
-                modeController.addPoint(worldX, worldY, z)
+                modeController.addPoint(finalX, finalY, pointZ)
                 syncModeState()
             }
             MapMode.ID_POINT -> {
-                modeController.addPoint(worldX, worldY, z)
+                modeController.addPoint(finalX, finalY, pointZ)
                 _uiState.value = _uiState.value.copy(
-                    tapLocalX = worldX,
-                    tapLocalY = worldY,
-                    tapZ = z,
-                    idPointMarker = modeController.idPointMarker
+                    tapLocalX = finalX,
+                    tapLocalY = finalY,
+                    tapZ = pointZ,
+                    idPointMarker = modeController.idPointMarker,
+                    isSnapped = isSnapped
                 )
             }
         }
@@ -574,6 +679,8 @@ class MapViewModel @Inject constructor(
         if (geoPdfRepository.hasValidGeoPdf) {
             val pixel = geoPdfRepository.gpsToPixel(lat, lng)
             val debugInfo = geoPdfRepository.getDebugInfo(lat, lng)
+            Log.d("GPS_PIPELINE", "GeoPDF: lat=$lat lng=$lng → pixel=(${pixel?.x}, ${pixel?.y}) " +
+                "null=${pixel == null}")
             _uiState.value = _uiState.value.copy(
                 gpsLat = lat,
                 gpsLng = lng,
@@ -586,6 +693,26 @@ class MapViewModel @Inject constructor(
         } else {
             val calibrationData = gpsCalibrationManager.calibrationFlow.first()
             val (localX, localY) = gpsCalibrationManager.transformToLocal(lat, lng, calibrationData)
+            
+            // Build debug info for DXF/Local mode
+            // We re-calculate UTM here just for display purposes
+            val utm = CoordinateUtils.latLngToUtm(lat, lng)
+            val dx = localX - utm.easting
+            val dy = localY - utm.northing
+            
+            val debugInfo = GeoPdfDebugInfo(
+                rawLat = lat,
+                rawLng = lng,
+                projectedX = utm.easting,
+                projectedY = utm.northing,
+                pixelX = localX,
+                pixelY = localY,
+                crsType = if (calibrationData.isCalibrated) "Local (Calibrated)" else "UTM (Raw)",
+                utmZone = utm.zone,
+                datum = "WGS84",
+                affineMatrix = "Offset: %.1f, %.1f".format(dx, dy)
+            )
+
             _uiState.value = _uiState.value.copy(
                 gpsLat = lat,
                 gpsLng = lng,
@@ -593,7 +720,7 @@ class MapViewModel @Inject constructor(
                 gpsLocalY = localY,
                 gpsAccuracy = accuracy,
                 coordinateText = coordText,
-                geoPdfDebugInfo = null
+                geoPdfDebugInfo = debugInfo
             )
         }
     }
@@ -602,38 +729,27 @@ class MapViewModel @Inject constructor(
     // Helpers
     // ════════════════════════════════════════════════════
 
-    private fun findNearestZ(x: Double, y: Double, dxf: DxfFile?): Double? {
+    private fun findNearestZ(x: Double, y: Double, dxf: DxfModel?): Double? {
         if (dxf == null) return null
         var minDist = Double.MAX_VALUE
         var bestZ: Double? = null
 
-        for (entity in dxf.entities) {
-            when (entity) {
-                is DxfEntity.Point -> {
-                    val d = sqrt(
-                        (entity.x - x) * (entity.x - x) + (entity.y - y) * (entity.y - y)
-                    )
-                    if (d < minDist) {
-                        minDist = d
-                        bestZ = entity.z
-                    }
-                }
-                is DxfEntity.Line -> {
-                    val d1 = sqrt(
-                        (entity.x1 - x) * (entity.x1 - x) + (entity.y1 - y) * (entity.y1 - y)
-                    )
-                    val d2 = sqrt(
-                        (entity.x2 - x) * (entity.x2 - x) + (entity.y2 - y) * (entity.y2 - y)
-                    )
-                    if (d1 < minDist) { minDist = d1; bestZ = entity.z1 }
-                    if (d2 < minDist) { minDist = d2; bestZ = entity.z2 }
-                }
-                is DxfEntity.Polyline -> {
-                    entity.vertices.forEach { v ->
-                        val d = sqrt((v.x - x) * (v.x - x) + (v.y - y) * (v.y - y))
-                        if (d < minDist) { minDist = d; bestZ = v.z }
-                    }
-                }
+        dxf.points.forEach { p ->
+            val d = sqrt((p.x - x) * (p.x - x) + (p.y - y) * (p.y - y))
+            if (d < minDist) { minDist = d; bestZ = p.z }
+        }
+
+        dxf.lines.forEach { l ->
+            val d1 = sqrt((l.start.x - x) * (l.start.x - x) + (l.start.y - y) * (l.start.y - y))
+            val d2 = sqrt((l.end.x - x) * (l.end.x - x) + (l.end.y - y) * (l.end.y - y))
+            if (d1 < minDist) { minDist = d1; bestZ = l.start.z }
+            if (d2 < minDist) { minDist = d2; bestZ = l.end.z }
+        }
+
+        dxf.polylines.forEach { p ->
+            p.vertices.forEach { v ->
+                val d = sqrt((v.x - x) * (v.x - x) + (v.y - y) * (v.y - y))
+                if (d < minDist) { minDist = d; bestZ = v.z }
             }
         }
 
@@ -646,5 +762,9 @@ class MapViewModel @Inject constructor(
     fun getSendToCalculateData(): Pair<Double, Double> {
         val measurement = modeController.getLiveMeasurement()
         return Pair(measurement.area, measurement.distance)
+    }
+
+    companion object {
+        private const val TAG = "DXF_RENDER"
     }
 }

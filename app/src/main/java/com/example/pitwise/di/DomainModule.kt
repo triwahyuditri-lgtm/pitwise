@@ -10,7 +10,7 @@ import com.example.pitwise.domain.calculator.MatchFactorCalculator
 import com.example.pitwise.domain.calculator.ObVolumeCalculator
 import com.example.pitwise.domain.calculator.ProductivityCalculator
 import com.example.pitwise.domain.calculator.RoadGradeCalculator
-import com.example.pitwise.domain.map.DxfParser
+import com.example.pitwise.domain.dxf.DxfParser
 import com.example.pitwise.domain.ruleengine.AdvisorEngine
 import com.example.pitwise.domain.ruleengine.FishboneEngine
 import com.example.pitwise.domain.reporting.ShareCardGenerator

@@ -34,6 +34,10 @@ class GeoPdfRepository @Inject constructor(
     val projectionInfo: ProjectionInfo?
         get() = engine.projectionInfo
 
+    /** The precomputed inverse matrix for tap handling. */
+    val inverseMatrix: com.example.pitwise.domain.transform.AffineMatrix?
+        get() = engine.inverseMatrix
+
     /**
      * Parse GeoPDF metadata from a PDF file URI and initialize the transform engine.
      *

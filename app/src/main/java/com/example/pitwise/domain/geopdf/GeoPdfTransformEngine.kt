@@ -21,15 +21,23 @@ class GeoPdfTransformEngine {
 
     private var metadata: GeoPdfMetadata? = null
     private var crsConverter: CrsConverter? = null
-    private var affineTransform: GeoAffineTransform? = null
+    private var affineMatrix: com.example.pitwise.domain.transform.AffineMatrix? = null
+    private var inverseAffineMatrix: com.example.pitwise.domain.transform.AffineMatrix? = null
 
     /** Whether the engine is fully initialized and ready for transforms. */
     val isInitialized: Boolean
-        get() = metadata != null && crsConverter != null && affineTransform != null
+        get() = metadata != null && crsConverter != null && affineMatrix != null
 
     /** The parsed projection info, if available. */
     val projectionInfo: ProjectionInfo?
         get() = metadata?.projection
+
+    /**
+     * The precomputed inverse affine matrix (Screen/Pixel -> World).
+     * Used for tap inversion.
+     */
+    val inverseMatrix: com.example.pitwise.domain.transform.AffineMatrix?
+        get() = inverseAffineMatrix
 
     /**
      * Initialize the engine with parsed GeoPDF metadata.
@@ -83,10 +91,22 @@ class GeoPdfTransformEngine {
             dstPoints.add(Pair(pixelX, pixelY))
         }
 
-        val affine = GeoAffineTransform.fromControlPoints(srcPoints, dstPoints)
+        // We use the new AffineMatrix class
+        // But need to solve for coefficients first. 
+        // We can reuse the solver logic from GeoAffineTransform manually or port it to AffineMatrix companion?
+        // Let's assume we update AffineMatrix companion to have a solver or use a util.
+        // Actually, let's keep GeoAffineTransform for solving (since it's already there) 
+        // and map it to AffineMatrix.
+        val solved = GeoAffineTransform.fromControlPoints(srcPoints, dstPoints)
             ?: return GeoPdfValidationResult.ParseError("Failed to solve affine transform from control points")
 
-        this.affineTransform = affine
+        val matrix = com.example.pitwise.domain.transform.AffineMatrix(
+            solved.a, solved.b, solved.tx,
+            solved.c, solved.d, solved.ty
+        )
+
+        this.affineMatrix = matrix
+        this.inverseAffineMatrix = matrix.invert()
 
         return GeoPdfValidationResult.Valid(geoPdfMetadata)
     }
@@ -100,13 +120,13 @@ class GeoPdfTransformEngine {
      */
     fun gpsToPixel(lat: Double, lng: Double): PixelPoint? {
         val converter = crsConverter ?: return null
-        val affine = affineTransform ?: return null
+        val affine = affineMatrix ?: return null
 
         // Step 1: WGS84 → Projected CRS
         val projected = converter.convert(lat, lng)
 
         // Step 2: Projected → PDF pixel
-        val (pixelX, pixelY) = affine.transform(projected.x, projected.y)
+        val (pixelX, pixelY) = affine.map(projected.x, projected.y)
 
         return PixelPoint(pixelX, pixelY)
     }
@@ -151,12 +171,11 @@ class GeoPdfTransformEngine {
      */
     fun getDebugInfo(lat: Double, lng: Double): GeoPdfDebugInfo? {
         val converter = crsConverter ?: return null
-        val affine = affineTransform ?: return null
+        val affine = affineMatrix ?: return null
         val meta = metadata ?: return null
 
         val projected = converter.convert(lat, lng)
-        val (pixelX, pixelY) = affine.transform(projected.x, projected.y)
-
+        val (pixelX, pixelY) = affine.map(projected.x, projected.y)
         return GeoPdfDebugInfo(
             rawLat = lat,
             rawLng = lng,
@@ -164,10 +183,10 @@ class GeoPdfTransformEngine {
             projectedY = projected.y,
             pixelX = pixelX,
             pixelY = pixelY,
-            crsType = meta.projection.type.name,
+            crsType = meta.projection.name,
             utmZone = meta.projection.utmZone,
             datum = meta.projection.datum,
-            affineMatrix = affine.toDebugString()
+            affineMatrix = affine.toString()
         )
     }
 
@@ -177,6 +196,7 @@ class GeoPdfTransformEngine {
     fun reset() {
         metadata = null
         crsConverter = null
-        affineTransform = null
+        affineMatrix = null
+        inverseAffineMatrix = null
     }
 }
