@@ -36,42 +36,46 @@ class SimpleDxfParser @Inject constructor() {
 
         // Find ENTITIES section
         var i = 0
-        while (i < rawLines.size) {
-            if (rawLines[i].equals("SECTION", ignoreCase = true) &&
-                i + 2 < rawLines.size &&
-                rawLines[i + 1].trim() == "2" &&
-                rawLines[i + 2].equals("ENTITIES", ignoreCase = true)
-            ) {
-                i += 3
-                break
+        while (i + 1 < rawLines.size) {
+            val code = rawLines[i].toIntOrNull()
+            val value = rawLines[i + 1]
+            if (code == 0 && value.equals("SECTION", ignoreCase = true)) {
+                if (i + 3 < rawLines.size &&
+                    rawLines[i + 2].trim() == "2" &&
+                    rawLines[i + 3].equals("ENTITIES", ignoreCase = true)
+                ) {
+                    i += 4
+                    break
+                }
             }
-            i++
+            i += 2
         }
 
         // Parse entities
-        while (i < rawLines.size) {
-            val line = rawLines[i]
+        while (i + 1 < rawLines.size) {
+            val code = rawLines[i].toIntOrNull()
+            val value = rawLines[i + 1]
 
-            if (line.equals("ENDSEC", ignoreCase = true)) break
+            if (code == 0 && value.equals("ENDSEC", ignoreCase = true)) break
 
-            if (line.equals("LINE", ignoreCase = true)) {
-                i = parseLine(rawLines, i + 1, lines, ::updateBounds)
+            if (code == 0 && value.equals("LINE", ignoreCase = true)) {
+                i = parseLine(rawLines, i + 2, lines, ::updateBounds)
                 continue
             }
-            if (line.equals("LWPOLYLINE", ignoreCase = true)) {
-                i = parseLwPolyline(rawLines, i + 1, polylines, ::updateBounds)
+            if (code == 0 && value.equals("LWPOLYLINE", ignoreCase = true)) {
+                i = parseLwPolyline(rawLines, i + 2, polylines, ::updateBounds)
                 continue
             }
-            if (line.equals("POLYLINE", ignoreCase = true)) {
-                i = parsePolyline(rawLines, i + 1, polylines, ::updateBounds)
+            if (code == 0 && value.equals("POLYLINE", ignoreCase = true)) {
+                i = parsePolyline(rawLines, i + 2, polylines, ::updateBounds)
                 continue
             }
-            if (line.equals("POINT", ignoreCase = true)) {
-                i = parsePoint(rawLines, i + 1, points, ::updateBounds)
+            if (code == 0 && value.equals("POINT", ignoreCase = true)) {
+                i = parsePoint(rawLines, i + 2, points, ::updateBounds)
                 continue
             }
 
-            i++
+            i += 2
         }
 
         // Fallback bounds if empty
@@ -112,12 +116,12 @@ class SimpleDxfParser @Inject constructor() {
             if (code == 0) break
 
             when (code) {
-                10 -> x1 = value.toDoubleOrNull() ?: 0.0
-                20 -> y1 = value.toDoubleOrNull() ?: 0.0
-                30 -> z1 = value.toDoubleOrNull()
-                11 -> x2 = value.toDoubleOrNull() ?: 0.0
-                21 -> y2 = value.toDoubleOrNull() ?: 0.0
-                31 -> z2 = value.toDoubleOrNull()
+                10 -> x1 = value.toDxfDoubleOrNull() ?: 0.0
+                20 -> y1 = value.toDxfDoubleOrNull() ?: 0.0
+                30 -> z1 = value.toDxfDoubleOrNull()
+                11 -> x2 = value.toDxfDoubleOrNull() ?: 0.0
+                21 -> y2 = value.toDxfDoubleOrNull() ?: 0.0
+                31 -> z2 = value.toDxfDoubleOrNull()
             }
             i += 2
         }
@@ -170,14 +174,14 @@ class SimpleDxfParser @Inject constructor() {
                     val flags = value.toIntOrNull() ?: 0
                     isClosed = (flags and 1) == 1
                 }
-                38 -> elevation = value.toDoubleOrNull()
+                38 -> elevation = value.toDxfDoubleOrNull()
                 10 -> {
                     // New vertex starts with code 10
                     finalizePendingVertex()
-                    currentX = value.toDoubleOrNull() ?: 0.0
+                    currentX = value.toDxfDoubleOrNull() ?: 0.0
                 }
-                20 -> currentY = value.toDoubleOrNull() ?: 0.0
-                30 -> currentZ = value.toDoubleOrNull()
+                20 -> currentY = value.toDxfDoubleOrNull() ?: 0.0
+                30 -> currentZ = value.toDxfDoubleOrNull()
             }
             i += 2
         }
@@ -220,7 +224,7 @@ class SimpleDxfParser @Inject constructor() {
                     val flags = value.toIntOrNull() ?: 0
                     isClosed = (flags and 1) == 1
                 }
-                30 -> polylineElevation = value.toDoubleOrNull()
+                30 -> polylineElevation = value.toDxfDoubleOrNull()
             }
             i += 2
         }
@@ -248,9 +252,9 @@ class SimpleDxfParser @Inject constructor() {
                     if (code == 0) break
 
                     when (code) {
-                        10 -> vx = value.toDoubleOrNull() ?: 0.0
-                        20 -> vy = value.toDoubleOrNull() ?: 0.0
-                        30 -> vz = value.toDoubleOrNull()
+                        10 -> vx = value.toDxfDoubleOrNull() ?: 0.0
+                        20 -> vy = value.toDxfDoubleOrNull() ?: 0.0
+                        30 -> vz = value.toDxfDoubleOrNull()
                     }
                     i += 2
                 }
@@ -301,9 +305,9 @@ class SimpleDxfParser @Inject constructor() {
             if (code == 0) break
 
             when (code) {
-                10 -> x = value.toDoubleOrNull() ?: 0.0
-                20 -> y = value.toDoubleOrNull() ?: 0.0
-                30 -> z = value.toDoubleOrNull()
+                10 -> x = value.toDxfDoubleOrNull() ?: 0.0
+                20 -> y = value.toDxfDoubleOrNull() ?: 0.0
+                30 -> z = value.toDxfDoubleOrNull()
             }
             i += 2
         }
@@ -313,3 +317,6 @@ class SimpleDxfParser @Inject constructor() {
         return i
     }
 }
+
+private fun String.toDxfDoubleOrNull(): Double? =
+    this.toDoubleOrNull() ?: this.replace(',', '.').toDoubleOrNull()
