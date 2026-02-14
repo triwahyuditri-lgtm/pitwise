@@ -254,6 +254,61 @@ class DxfParserTest {
         assertEquals(100.0, result.bounds.maxY, 0.001)
     }
 
+
+
+    @Test
+    fun `parse entities when SECTION follows group code 0`() {
+        val dxf = """
+            0
+            SECTION
+            2
+            ENTITIES
+            0
+            LINE
+            10
+            1.0
+            20
+            2.0
+            11
+            3.0
+            21
+            4.0
+            0
+            ENDSEC
+            0
+            EOF
+        """.trimIndent()
+
+        val result = parser.parse(dxf)
+        assertEquals(1, result.lines.size)
+    }
+
+    @Test
+    fun `parse numeric values with decimal comma`() {
+        val dxf = """
+            0
+            SECTION
+            2
+            ENTITIES
+            0
+            POINT
+            10
+            123,45
+            20
+            678,90
+            30
+            10,5
+            0
+            ENDSEC
+        """.trimIndent()
+
+        val result = parser.parse(dxf)
+        assertEquals(1, result.points.size)
+        val point = result.points[0]
+        assertEquals(123.45, point.x, 0.001)
+        assertEquals(678.90, point.y, 0.001)
+        assertEquals(10.5, point.z!!, 0.001)
+    }
     @Test
     fun `parse multiple entity types`() {
         val dxf = """
