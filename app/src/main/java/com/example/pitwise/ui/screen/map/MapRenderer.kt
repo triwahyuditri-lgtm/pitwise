@@ -90,15 +90,16 @@ fun MapRenderer(
         // Used for UI overlays (GPS, Markers, Labels)
         
         fun worldToScreen(wx: Double, wy: Double): Offset {
-             // 1. Apply Y-inversion if needed (World Space -> Visual Space)
+             // 1. Apply Y-inversion (World Space -> Visual Space)
              val visualY = if (flipY) -wy else wy
              
              // 2. Apply Transform (Visual Space -> Screen Space)
-             // Screen = (Visual * scale) + offset
-             return Offset(
-                 x = (wx.toFloat() * scale) + offsetX,
-                 y = (visualY.toFloat() * scale) + offsetY
-             )
+             // Use Double for intermediate calculation to preserve precision
+             // when World * Scale is large but cancels out with Offset.
+             val sx = (wx * scale.toDouble()) + offsetX.toDouble()
+             val sy = (visualY * scale.toDouble()) + offsetY.toDouble()
+             
+             return Offset(sx.toFloat(), sy.toFloat())
         }
 
         // ════════════════════════════════════════════════════
@@ -145,18 +146,24 @@ fun MapRenderer(
             }
 
             // ── B. DXF Layer ──
+            // Rendered using Relative Coordinates (Center-based) to preserve float precision
+            // The drawing function handles its own transform stack (Translate Center -> Scale)
             if (showDxfLayer && dxfGeometry != null) {
-                // DXF Coordinates: Y-Up (Cartesian) → flip to Y-Down for screen
-                if (flipY) {
-                    withTransform({
-                        scale(1f, -1f) // Invert Y axis
-                    }) {
-                        drawDxfPaths(dxfGeometry, scale, renderValidated)
-                    }
-                } else {
-                    drawDxfPaths(dxfGeometry, scale, renderValidated)
-                }
+                // We do NOT use the outer 'scale(scale, scale)' here because drawDxfPaths
+                // establishes its own relative coordinate system centered on the geometry.
+                // However, we ARE inside 'translate(offsetX, offsetY); scale(scale, scale)' from lines 137-138.
+                // Wait. If we are inside `scale(scale, scale)`, precise large translations won't work.
+                // We need to escape the outer transform or compensate.
+                // Actually, `drawDxfPaths` uses `worldToScreen` to get the screen center.
+                // `worldToScreen` returns absolute screen coordinates.
+                // So we should NOT be inside the relative transform block of Layer 1.
+                // We should move this call OUTSIDE the `withTransform` block of Layer 1.
             }
+        } // End of Layer 1 transform
+
+        // ── B. DXF Layer (Relative Render) ──
+        if (showDxfLayer && dxfGeometry != null) {
+            drawDxfPaths(dxfGeometry, scale, flipY, ::worldToScreen, renderValidated)
         }
 
         // ════════════════════════════════════════════════════
@@ -254,37 +261,71 @@ fun MapRenderer(
 // DXF Drawing Helper
 // ════════════════════════════════════════════════════
 
-private fun DrawScope.drawDxfPaths(geometry: DxfGeometry, mapScale: Float, validated: MutableSet<String> = mutableSetOf()) {
-    // 1. Draw Lines/Polylines (Grouped by Color)
-    val strokeWidth = maxOf(1.5f / mapScale, 0.5f)
-    
-    // One-time render validation
-    if ("dxf" !in validated) {
-        validated.add("dxf")
-        Log.d("DXF_RENDER_VALIDATE", "Drawing: paths=${geometry.paths.size} strokeWidth=$strokeWidth scale=$mapScale")
-        geometry.paths.entries.firstOrNull()?.let { (colorInt, _) ->
-            Log.d("DXF_RENDER_VALIDATE", "First path color: 0x${Integer.toHexString(colorInt)}")
-        }
-    }
-    
-    geometry.paths.forEach { (colorInt, path) ->
-        drawPath(
-            path = path,
-            color = Color(colorInt),
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth)
-        )
-    }
+private fun DrawScope.drawDxfPaths(
+    geometry: DxfGeometry,
+    mapScale: Float,
+    flipY: Boolean,
+    worldToScreen: (Double, Double) -> Offset,
+    validated: MutableSet<String> = mutableSetOf()
+) {
+    // Calculate Screen Position of the Geometry Center
+    val screenCenter = worldToScreen(geometry.centerX, geometry.centerY)
 
-    // 2. Draw Points (Grouped by Color)
-    val pointRadius = maxOf(3f / mapScale, 1.5f)
-    geometry.points.forEach { (colorInt, pointsList) ->
-        val pointColor = Color(colorInt)
-        pointsList.forEach { point ->
-            drawCircle(
-                color = pointColor, 
-                radius = pointRadius, 
-                center = Offset(point.x.toFloat(), point.y.toFloat())
+    // Apply Transform: Translate to Screen Center -> Scale (and flip Y if needed)
+    withTransform({
+        translate(screenCenter.x, screenCenter.y)
+        // If flipY is true, we need to invert Y scale.
+        // NOTE: worldToScreen ALREADY handles flipY for the center position.
+        // But for the PATH itself (which is generated as Y-Up or Y-Down relative),
+        // we need to match the coordinate system of the path.
+        // DXF is Y-Up. Relative coords (y - cy) are Y-Up.
+        // Screen is Y-Down.
+        // If flipY is true (standard), we scale(1f, -1f).
+        // If flipY is false (already Y-Down?), we scale(1f, 1f).
+        val yScale = if (flipY) -mapScale else mapScale
+        scale(mapScale, yScale)
+    }) {
+         // 1. Draw Lines/Polylines (Grouped by Color)
+        // Stroke width: desire ~1.5 screen pixels.
+        // Since we are inside a `scale(mapScale)` transform, 
+        // a stroke width of W will be drawn as W * mapScale pixels.
+        // To get 1.5 pixels, W must be 1.5 / mapScale.
+        // We add a safety check for scale > 0.
+        val targetScreenPx = 1.5f
+        val strokeWidth = if (mapScale > 0) targetScreenPx / mapScale else 1f
+        
+        // Validation logging
+        if ("dxf" !in validated) {
+            validated.add("dxf")
+            Log.d("DXF_RENDER_VALIDATE", "Drawing Relative: center=(${geometry.centerX}, ${geometry.centerY}) " +
+                "screen=(${screenCenter.x}, ${screenCenter.y}) strokeWidth=$strokeWidth scale=$mapScale")
+        }
+        
+        geometry.paths.forEach { (colorInt, path) ->
+            drawPath(
+                path = path,
+                color = Color(colorInt),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth)
             )
+        }
+
+        // 2. Draw Points (Grouped by Color)
+        // Radius: desire ~3 screen pixels.
+        // Radius R will be drawn as R * mapScale pixels.
+        // To get 3 pixels, R = 3 / mapScale.
+        val targetRadiusPx = 3f
+        val pointRadius = if (mapScale > 0) targetRadiusPx / mapScale else 2f
+
+        geometry.points.forEach { (colorInt, pointsList) ->
+            val pointColor = Color(colorInt)
+            pointsList.forEach { point ->
+                // Point coordinates are relative to center (0,0 in this transformed space)
+                drawCircle(
+                    color = pointColor, 
+                    radius = pointRadius, 
+                    center = Offset(point.x.toFloat(), point.y.toFloat())
+                )
+            }
         }
     }
 }
@@ -295,30 +336,38 @@ private fun DrawScope.drawDxfPaths(geometry: DxfGeometry, mapScale: Float, valid
 
 private data class DxfGeometry(
     val paths: Map<Int, androidx.compose.ui.graphics.Path>,
-    val points: Map<Int, List<DxfEntity.Point>>
+    val points: Map<Int, List<DxfEntity.Point>>,
+    val centerX: Double,
+    val centerY: Double
 )
 
 private fun generateDxfGeometry(dxf: DxfModel): DxfGeometry {
     val paths = mutableMapOf<Int, androidx.compose.ui.graphics.Path>()
     val resultPoints = mutableMapOf<Int, MutableList<DxfEntity.Point>>()
 
-    // Helper to get path for a color
+    // Calculate center for relative rendering (prevents Float precision issues)
+    val centerX = (dxf.bounds.minX + dxf.bounds.maxX) / 2.0
+    val centerY = (dxf.bounds.minY + dxf.bounds.maxY) / 2.0
+
+    // Helper to get path
     fun getPath(color: Int): androidx.compose.ui.graphics.Path {
         return paths.getOrPut(color) { androidx.compose.ui.graphics.Path() }
     }
 
     dxf.lines.forEach { line ->
         val p = getPath(line.color)
-        p.moveTo(line.start.x.toFloat(), line.start.y.toFloat())
-        p.lineTo(line.end.x.toFloat(), line.end.y.toFloat())
+        p.moveTo((line.start.x - centerX).toFloat(), (line.start.y - centerY).toFloat())
+        p.lineTo((line.end.x - centerX).toFloat(), (line.end.y - centerY).toFloat())
     }
 
     dxf.polylines.forEach { poly ->
         if (poly.vertices.isNotEmpty()) {
             val p = getPath(poly.color)
-            p.moveTo(poly.vertices.first().x.toFloat(), poly.vertices.first().y.toFloat())
+            val first = poly.vertices.first()
+            p.moveTo((first.x - centerX).toFloat(), (first.y - centerY).toFloat())
             for (i in 1 until poly.vertices.size) {
-                p.lineTo(poly.vertices[i].x.toFloat(), poly.vertices[i].y.toFloat())
+                val v = poly.vertices[i]
+                p.lineTo((v.x - centerX).toFloat(), (v.y - centerY).toFloat())
             }
             if (poly.isClosed) {
                 p.close()
@@ -327,10 +376,21 @@ private fun generateDxfGeometry(dxf: DxfModel): DxfGeometry {
     }
 
     dxf.points.forEach { point ->
-        resultPoints.getOrPut(point.color) { mutableListOf() }.add(point)
+        // Store points relative to center?
+        // Actually, drawCircle takes absolute offset if we use drawCircle.
+        // But we want to use the same relative transform for points too.
+        // So let's store RELATIVE coordinates in a new list?
+        // DxfEntity.Point is immutable. We can create a lightweight relative point or just map it at draw time?
+        // Mapping at draw time means dealing with Doubles again.
+        // Better to store transformed points.
+        // But DxfEntity.Point has metadata.
+        // Let's just create a new list of relative offsets for drawing points.
+        resultPoints.getOrPut(point.color) { mutableListOf() }.add(
+            point.copy(x = point.x - centerX, y = point.y - centerY)
+        )
     }
 
-    return DxfGeometry(paths, resultPoints)
+    return DxfGeometry(paths, resultPoints, centerX, centerY)
 }
 
 // ════════════════════════════════════════════════════

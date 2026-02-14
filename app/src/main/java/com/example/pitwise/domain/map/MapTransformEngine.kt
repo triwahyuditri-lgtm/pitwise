@@ -27,20 +27,24 @@ class MapTransformEngine {
     /**
      * Convert world (map) coordinates to screen pixel coordinates.
      */
+    /**
+     * Convert world (map) coordinates to screen pixel coordinates.
+     */
     fun worldToScreen(wx: Double, wy: Double): Offset {
         val sy = if (flipY) -wy else wy
-        return Offset(
-            x = (wx.toFloat() * scale) + offsetX,
-            y = (sy.toFloat() * scale) + offsetY
-        )
+        // Use Double math
+        val sx = (wx * scale.toDouble()) + offsetX.toDouble()
+        val screenY = (sy * scale.toDouble()) + offsetY.toDouble()
+        return Offset(sx.toFloat(), screenY.toFloat())
     }
 
     /**
      * Convert screen pixel coordinates to world (map) coordinates.
      */
     fun screenToWorld(sx: Float, sy: Float): Pair<Double, Double> {
-        val wx = ((sx - offsetX) / scale).toDouble()
-        val rawY = ((sy - offsetY) / scale).toDouble()
+        // wx = (sx - offsetX) / scale
+        val wx = (sx.toDouble() - offsetX.toDouble()) / scale.toDouble()
+        val rawY = (sy.toDouble() - offsetY.toDouble()) / scale.toDouble()
         val wy = if (flipY) -rawY else rawY
         return Pair(wx, wy)
     }

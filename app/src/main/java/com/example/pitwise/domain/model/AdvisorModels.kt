@@ -41,12 +41,5 @@ data class AdvisorOutput(
     val recommendations: List<AdvisorRecommendation>  // max 3
 )
 
-// ── Share Card Data ───────────────────────────────────
-data class ShareCardData(
-    val title: String,
-    val resultLines: List<Pair<String, String>>,  // label → value
-    val timestamp: String,
-    val shift: String,
-    val unitName: String,
-    val aiRecommendation: String?
-)
+// ── Share Card Data moved to separate file
+
