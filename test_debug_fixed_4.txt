@@ -26,22 +26,22 @@
 > Task :app:preDebugUnitTestBuild UP-TO-DATE
 > Task :app:processDebugJavaRes UP-TO-DATE
 > Task :app:bundleDebugClassesToCompileJar UP-TO-DATE
-> Task :app:kspDebugUnitTestKotlin UP-TO-DATE
-> Task :app:compileDebugUnitTestKotlin UP-TO-DATE
 > Task :app:javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :app:kspDebugUnitTestKotlin
+> Task :app:compileDebugUnitTestKotlin
 > Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
 > Task :app:hiltAggregateDepsDebugUnitTest UP-TO-DATE
 > Task :app:hiltJavaCompileDebugUnitTest NO-SOURCE
 > Task :app:processDebugUnitTestJavaRes UP-TO-DATE
-> Task :app:transformDebugUnitTestClassesWithAsm UP-TO-DATE
+> Task :app:transformDebugUnitTestClassesWithAsm
 
 > Task :app:testDebugUnitTest FAILED
 
 GeoPdfRobustnessTest > engine correctly infers Top-Down Y orientation (Standard) FAILED
-    java.lang.AssertionError at GeoPdfRobustnessTest.kt:98
+    java.lang.AssertionError at GeoPdfRobustnessTest.kt:101
 
 GeoPdfRobustnessTest > engine correctly infers Bottom-Up Y orientation (Flipped) FAILED
-    java.lang.AssertionError at GeoPdfRobustnessTest.kt:147
+    java.lang.AssertionError at GeoPdfRobustnessTest.kt:158
 
 4 tests completed, 2 failed
 
@@ -52,7 +52,7 @@ Execution failed for task ':app:testDebugUnitTest'.
 > There were failing tests. See the report at: file:///D:/MyApplication2/app/build/reports/tests/testDebugUnitTest/index.html
 
 * Try:
-31 actionable tasks: 1 executed, 30 up-to-date
 > Run with --scan to get full insights.
 
-BUILD FAILED in 3s
+BUILD FAILED in 6s
+31 actionable tasks: 4 executed, 27 up-to-date

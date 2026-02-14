@@ -18,6 +18,7 @@ import com.example.pitwise.domain.dxf.DxfModel
 import com.example.pitwise.domain.map.MapPoint
 import com.example.pitwise.domain.map.MapSerializationUtils
 
+@Deprecated("Use MapRenderer instead for all map rendering.")
 @Composable
 fun MapContent(
     modifier: Modifier = Modifier,

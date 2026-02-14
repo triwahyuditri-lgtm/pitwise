@@ -66,47 +66,111 @@ class GeoPdfTransformEngine {
         // Source: projected coordinates (convert GPTS from lat/lng → projected)
         // Destination: pixel coordinates (LPTS, denormalized if needed)
         val srcPoints = mutableListOf<Pair<Double, Double>>()
-        val dstPoints = mutableListOf<Pair<Double, Double>>()
-
-        for (i in geoPdfMetadata.gpts.indices) {
-            val gpt = geoPdfMetadata.gpts[i]
-            val lpt = geoPdfMetadata.lpts[i]
-
-            // GPTS contains lat/lng — convert to projected CRS
-            val projected = converter.convert(gpt.x, gpt.y)
-            srcPoints.add(Pair(projected.x, projected.y))
-
-            // LPTS: denormalize if needed (convert 0-1 → PDF page coordinates)
-            val pixelX: Double
-            val pixelY: Double
-            if (geoPdfMetadata.lptsNormalized) {
-                pixelX = lpt.x * geoPdfMetadata.pageWidth
-                // In normalized LPTS, Y=0 means top of page, Y=1 means bottom
-                // This matches screen coordinates (origin at top-left)
-                pixelY = lpt.y * geoPdfMetadata.pageHeight
-            } else {
-                pixelX = lpt.x
-                pixelY = lpt.y
-            }
-            dstPoints.add(Pair(pixelX, pixelY))
-        }
-
         // We use the new AffineMatrix class
         // But need to solve for coefficients first. 
-        // We can reuse the solver logic from GeoAffineTransform manually or port it to AffineMatrix companion?
-        // Let's assume we update AffineMatrix companion to have a solver or use a util.
-        // Actually, let's keep GeoAffineTransform for solving (since it's already there) 
-        // and map it to AffineMatrix.
-        val solved = GeoAffineTransform.fromControlPoints(srcPoints, dstPoints)
-            ?: return GeoPdfValidationResult.ParseError("Failed to solve affine transform from control points")
 
+        // Populate srcPoints (projected coordinates) once
+        for (i in geoPdfMetadata.gpts.indices) {
+            val gpt = geoPdfMetadata.gpts[i]
+            val projected = converter.convert(gpt.x, gpt.y)
+            srcPoints.add(Pair(projected.x, projected.y))
+        }
+        
+        // 1. Prepare Destination Candidates
+        // If LPTS is normalized, we don't know if Y is Top-Down (0=Top) or Bottom-Up (0=Bottom).
+        // We try BOTH hypotheses and pick the one with better RMSE.
+        
+        var selectedTransform: GeoAffineTransform? = null
+        var selectedRmse = Double.MAX_VALUE
+        
+        // Hypothesis A: Standard / Top-Down (Y=0 is Top)
+        // This is standard for PDF and Screen coordinates.
+        // If normalized: pixelY = lpt.y * height
+        // If raw: pixelY = lpt.y
+        val dstPointsA = mutableListOf<Pair<Double, Double>>()
+        for (i in geoPdfMetadata.gpts.indices) {
+             val lpt = geoPdfMetadata.lpts[i]
+             val px = if (geoPdfMetadata.lptsNormalized) lpt.x * geoPdfMetadata.pageWidth else lpt.x
+             val py = if (geoPdfMetadata.lptsNormalized) lpt.y * geoPdfMetadata.pageHeight else lpt.y
+             dstPointsA.add(px to py)
+        }
+        
+        val transformA = GeoAffineTransform.fromControlPoints(srcPoints, dstPointsA)
+        if (transformA != null) {
+            val rmseA = transformA.calculateRMSE(srcPoints, dstPointsA)
+            selectedTransform = transformA
+            selectedRmse = rmseA
+        }
+
+        // Hypothesis B: Flipped / Bottom-Up (Y=0 is Bottom) - ONLY for normalized
+        // Some formats (like old OGC or specific exporters) use Cartesian math where Y increases UP.
+        // pixelY = (1.0 - lpt.y) * height
+        if (geoPdfMetadata.lptsNormalized) {
+            val dstPointsB = mutableListOf<Pair<Double, Double>>()
+            for (i in geoPdfMetadata.gpts.indices) {
+                val lpt = geoPdfMetadata.lpts[i]
+                val px = lpt.x * geoPdfMetadata.pageWidth
+                val py = (1.0 - lpt.y) * geoPdfMetadata.pageHeight
+                dstPointsB.add(px to py)
+            }
+            
+            val transformB = GeoAffineTransform.fromControlPoints(srcPoints, dstPointsB)
+            if (transformB != null) {
+                val rmseB = transformB.calculateRMSE(srcPoints, dstPointsB)
+                
+                // transformA might be null, or we compare RMSE (lower is better)
+                if (transformA == null) {
+                    selectedTransform = transformB
+                    selectedRmse = rmseB
+                } else {
+                    // Ambiguity check: if both have similar RMSE (e.g. perfect fit),
+                    // prefer the one that results in North-Up orientation (d < 0).
+                    // In standard map projection (Y increases North) vs Screen (Y increases South),
+                    // we expect d (scaleY) to be NEGATIVE.
+                    // If d is positive, the map is upside-down (South-Up).
+                    
+                    val diff = rmseB - selectedRmse // (rmseA)
+                    if (kotlin.math.abs(diff) < 1.0) { // arbitrary small tolerance, e.g. 1 pixel
+                        val dA = transformA.d
+                        val dB = transformB.d
+                        
+                        // If A is South-Up (>0) and B is North-Up (<0), prefer B
+                        if (dA > 0 && dB < 0) {
+                             selectedTransform = transformB
+                             selectedRmse = rmseB
+                        }
+                        // If A is North-Up (<0) and B is South-Up (>0), stick with A (already selected)
+                    } else if (rmseB < selectedRmse) {
+                         selectedTransform = transformB
+                         selectedRmse = rmseB
+                    }
+                }
+            }
+        }
+
+        if (selectedTransform == null) {
+             return GeoPdfValidationResult.ParseError("Failed to solve affine transform (Singular Matrix or Collinear Points)")
+        }
+        
+        // Final Singular Check
+        // If RMSE is huge, maybe warn? For now we accept it but log it.
+        // But check invertibility.
+        
         val matrix = com.example.pitwise.domain.transform.AffineMatrix(
-            solved.a, solved.b, solved.tx,
-            solved.c, solved.d, solved.ty
+            selectedTransform.a, selectedTransform.b, selectedTransform.tx,
+            selectedTransform.c, selectedTransform.d, selectedTransform.ty
         )
+        
+        val inverse = matrix.invert()
+        if (inverse == null) {
+             val debug = "| A=%.4f B=%.4f TX=%.2f |\n| C=%.4f D=%.4f TY=%.2f |".format(
+                 matrix.a, matrix.b, matrix.tx, matrix.c, matrix.d, matrix.ty
+             )
+             return GeoPdfValidationResult.ParseError("Transform is valid but not invertible (Singular). $debug")
+        }
 
         this.affineMatrix = matrix
-        this.inverseAffineMatrix = matrix.invert()
+        this.inverseAffineMatrix = inverse
 
         return GeoPdfValidationResult.Valid(geoPdfMetadata)
     }

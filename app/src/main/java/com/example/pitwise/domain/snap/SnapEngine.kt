@@ -4,8 +4,7 @@ package com.example.pitwise.domain.snap
  * Snap Engine responsible for finding the nearest vertex within a tolerance.
  */
 class SnapEngine(
-    private val spatialIndex: SpatialIndex,
-    private val snapThresholdMeters: Double = 2.0 // Configurable threshold
+    private val spatialIndex: SpatialIndex
 ) {
 
     /**
@@ -19,7 +18,7 @@ class SnapEngine(
     /**
      * Find the nearest vertex to [worldX, worldY] within [snapThresholdMeters].
      */
-    fun findVertex(worldX: Double, worldY: Double): SnapResult? {
-        return spatialIndex.queryNearest(worldX, worldY, snapThresholdMeters)
+    fun findVertex(worldX: Double, worldY: Double, radius: Double): SnapResult? {
+        return spatialIndex.queryNearest(worldX, worldY, radius)
     }
 }

@@ -1,5 +1,7 @@
 package com.example.pitwise.domain.geopdf
 
+import android.util.Log
+
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.pdmodel.PDPage
 import com.tom_roush.pdfbox.cos.COSArray
@@ -50,9 +52,11 @@ class GeoPdfParser {
                 val adobeResult = tryParseAdobeFormat(page, pageWidth, pageHeight)
                 if (adobeResult != null) return adobeResult
 
+                Log.w("GeoPdfParser", "No valid OGC or Adobe GeoPDF metadata found.")
                 null
             }
         } catch (e: Exception) {
+            Log.e("GeoPdfParser", "Unexpected error during parsing", e)
             null
         }
     }
@@ -146,7 +150,10 @@ class GeoPdfParser {
             }
         }
 
-        if (groundPoints.size != pixelPoints.size) return null
+        if (groundPoints.size != pixelPoints.size) {
+            Log.w("GeoPdfParser", "Mismatch between GPTS count (${groundPoints.size}) and LPTS count (${pixelPoints.size})")
+            return null
+        }
 
         // Detect if LPTS is normalized (values all in [0,1] range)
         val lptsNormalized = lpts.all { it in 0.0..1.0 }
@@ -163,7 +170,10 @@ class GeoPdfParser {
                 datum = "D_WGS_1984"
             )
         }
-        if (projection == null) return null
+        if (projection == null) {
+            Log.w("GeoPdfParser", "Failed to parse projection (GCS/WKT)")
+            return null
+        }
 
         // Build bounding box from GPTS
         val lats = groundPoints.map { it.x }

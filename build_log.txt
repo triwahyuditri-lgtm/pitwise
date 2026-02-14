@@ -1,7 +1,7 @@
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
 > Task :app:preBuild UP-TO-DATE
 > Task :app:preDebugBuild UP-TO-DATE
-> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
-> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:generateDebugBuildConfig UP-TO-DATE
 > Task :app:checkDebugAarMetadata UP-TO-DATE
 > Task :app:generateDebugResValues UP-TO-DATE
 > Task :app:mapDebugSourceSetPaths UP-TO-DATE
@@ -16,37 +16,9 @@
 > Task :app:processDebugManifestForPackage UP-TO-DATE
 > Task :app:processDebugResources UP-TO-DATE
 > Task :app:kspDebugKotlin UP-TO-DATE
-> Task :app:javaPreCompileDebug UP-TO-DATE
-> Task :app:mergeDebugShaders UP-TO-DATE
-> Task :app:compileDebugShaders NO-SOURCE
-> Task :app:generateDebugAssets UP-TO-DATE
-> Task :app:mergeDebugAssets UP-TO-DATE
-> Task :app:compressDebugAssets UP-TO-DATE
-> Task :app:l8DexDesugarLibDebug UP-TO-DATE
-> Task :app:checkDebugDuplicateClasses UP-TO-DATE
-> Task :app:desugarDebugFileDependencies UP-TO-DATE
-> Task :app:mergeExtDexDebug UP-TO-DATE
-> Task :app:mergeLibDexDebug UP-TO-DATE
-> Task :app:mergeDebugJniLibFolders UP-TO-DATE
-> Task :app:mergeDebugNativeLibs UP-TO-DATE
-> Task :app:stripDebugDebugSymbols UP-TO-DATE
-> Task :app:validateSigningDebug UP-TO-DATE
-> Task :app:writeDebugAppMetadata UP-TO-DATE
-> Task :app:writeDebugSigningConfigVersions UP-TO-DATE
 
 > Task :app:compileDebugKotlin FAILED
-e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/ui/screen/productivity/ProductivityScreen.kt:475:13 Unresolved reference 'ProductivityResult'.
-e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/ui/screen/productivity/ProductivityScreen.kt:479:23 'when' expression must be exhaustive. Add an 'else' branch.
-e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/ui/screen/productivity/ProductivityScreen.kt:479:36 Unresolved reference 'status'.
-e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/ui/screen/productivity/ProductivityScreen.kt:510:39 Unresolved reference 'status'.
-e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/ui/screen/productivity/ProductivityScreen.kt:527:48 Unresolved reference 'totalProduction'.
-e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/ui/screen/productivity/ProductivityScreen.kt:535:56 Unresolved reference 'targetProduction'.
-e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/ui/screen/productivity/ProductivityScreen.kt:543:39 Unresolved reference 'targetProduction'.
-e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/ui/screen/productivity/ProductivityScreen.kt:544:25 Unresolved reference 'totalProduction'.
-e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/ui/screen/productivity/ProductivityScreen.kt:544:50 Unresolved reference 'targetProduction'.
-e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/ui/screen/productivity/ProductivityScreen.kt:565:59 Unresolved reference 'deviationPercent'.
-e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/ui/screen/productivity/ProductivityScreen.kt:573:65 Unresolved reference 'actualProductivityPerHour'.
-e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/ui/screen/productivity/ProductivityScreen.kt:589:41 Unresolved reference 'status'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/dxf/DxfParser.kt:774:50 Unresolved reference 'isByBlock'.
 
 FAILURE: Build failed with an exception.
 
@@ -61,5 +33,5 @@ Execution failed for task ':app:compileDebugKotlin'.
 > Run with --scan to get full insights.
 > Get more help at https://help.gradle.org.
 
-BUILD FAILED in 4s
-30 actionable tasks: 1 executed, 29 up-to-date
+BUILD FAILED in 3s
+16 actionable tasks: 1 executed, 15 up-to-date

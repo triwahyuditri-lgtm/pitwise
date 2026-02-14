@@ -97,6 +97,8 @@ data class MapUiState(
     // Tap info (for VIEW mode tooltip + bottom panel)
     val tapLocalX: Double? = null,
     val tapLocalY: Double? = null,
+    val tapProjectedX: Double? = null,
+    val tapProjectedY: Double? = null,
     val tapZ: Double? = null,
     val showTapTooltip: Boolean = false,
 
@@ -415,82 +417,107 @@ class MapViewModel @Inject constructor(
 
     fun onMapTap(worldX: Double, worldY: Double) {
         // Query Snap Engine
-        // We only snap in ID_POINT mode (as requested) or potentially others if useful.
+        // worldX/worldY are Local (Visual) coordinates from MapRenderer tap event.
         
-        var finalX = worldX
-        var finalY = worldY
+        var finalLocalX = worldX
+        var finalLocalY = worldY
+        var finalProjectedX = worldX
+        var finalProjectedY = worldY
         var finalZ: Double? = null
         var isSnapped = false
         var isProjected = false
 
         // 1. GeoPDF Inverse Transform (Priority)
-        // worldX/worldY here are currently "Local" coordinates (PDF Pixels) because
-        // MapRenderer doesn't know about GeoPDF projection yet.
-        // We must convert these Local Pixels -> Projected World (UTM)
+        // If GeoPDF is active, Local -> Projected (UTM/Geo)
         if (geoPdfRepository.hasValidGeoPdf) {
             val inverse = geoPdfRepository.inverseMatrix
             if (inverse != null) {
                 // Apply inverse affine: Pixel -> Projected
                 val (projX, projY) = inverse.map(worldX, worldY)
-                finalX = projX
-                finalY = projY
+                finalProjectedX = projX
+                finalProjectedY = projY
                 isProjected = true
-                // Note: We don't snap to DXF if we are in GeoPDF mode usually?
-                // Or maybe we overlay DXF on PDF?
-                // If mixed, it's complex. Assuming GeoPDF primary for now.
+                // Note: We snap in Local space or Projected space?
+                // SnapEngine usually built from DxfModel. 
+                // If DxfModel is loaded, is it in Local or Projected coords?
+                // Standard flow: DXF are displayed via "flipY" transform on top of PDF?
+                // If DXF matches PDF visual, then DXF coords ARE Local.
             }
+        } else {
+             // Fallback/Standard: Local == Projected (unless GpsCalibration used, but for now simple)
+             // Use calibration to transform if exists? 
+             // gpsCalibrationManager.transformToGlobal? 
+             // For now, assume 1:1 if not GeoPDF or handle basic calibration later.
         }
 
-        // 2. DXF Snap (if not GeoPDF or if we support mixed)
-        // If we have DXF model, we might want to snap.
-        // BUT: DxfModel coordinates are usually Local or Projected.
-        // If PDF and DXF are aligned, then DXF coordinates should be in Projected space too?
-        // Or if PDF is background, DXF is overlay.
-        // If we converted tap to Projected, and DXF is in Projected, then snapping works.
-        
+        // 2. DXF Snap 
+        // Snap uses Local coordinates if DXF is rendered in Local space (which it is, relative to itself).
         if (_uiState.value.dxfModel != null) {
-            val snapResult = snapEngine.findVertex(finalX, finalY)
+            // Dynamic Snap Radius: ~30 screen pixels
+            // radiusWorld = radiusPixels / scale
+            val screenTolerancePx = 30.0 
+            val detectionRadius = screenTolerancePx / _uiState.value.scale
+
+            val snapResult = snapEngine.findVertex(finalLocalX, finalLocalY, detectionRadius)
             if (snapResult != null) {
-                finalX = snapResult.vertex.x
-                finalY = snapResult.vertex.y
+                finalLocalX = snapResult.vertex.x
+                finalLocalY = snapResult.vertex.y
                 finalZ = snapResult.vertex.z
+                
+                // If snapped, update Projected to match Snapped Local
+                if (isProjected) {
+                     // Recalculate projected from snapped local
+                     // (Optional, if we want strict consistency)
+                     val inverse = geoPdfRepository.inverseMatrix
+                     if (inverse != null) {
+                        val (px, py) = inverse.map(finalLocalX, finalLocalY)
+                        finalProjectedX = px
+                        finalProjectedY = py
+                     }
+                } else {
+                    finalProjectedX = finalLocalX
+                    finalProjectedY = finalLocalY
+                }
                 isSnapped = true
             }
         }
 
         val pointZ = finalZ
 
-        // 3. Update Coordinate Display for the Tap
-        // If we are isProjected, finalX/Y are UTM.
-        // We might want to show them as Lat/Lng in the tooltip if preferred?
-        // Logic below updates uiState.
-
+        // 3. Update State
         when (modeController.currentMode) {
             MapMode.VIEW -> {
                 // Show coordinate tooltip
-                modeController.addPoint(finalX, finalY, pointZ)
+                // We store Local for marker (Rendering)
+                // We store Projected for Tooltip (Display)
+                modeController.addPoint(finalLocalX, finalLocalY, pointZ) 
                 _uiState.value = _uiState.value.copy(
-                    tapLocalX = finalX,
-                    tapLocalY = finalY,
+                    tapLocalX = finalLocalX,
+                    tapLocalY = finalLocalY,
+                    tapProjectedX = finalProjectedX,
+                    tapProjectedY = finalProjectedY,
                     tapZ = pointZ,
                     showTapTooltip = true,
-                    idPointMarker = MapVertex(finalX, finalY, pointZ),
+                    // Marker uses LOCAL coordinates for rendering
+                    idPointMarker = MapVertex(finalLocalX, finalLocalY, pointZ),
                     isSnapped = isSnapped
                 )
             }
             MapMode.PLOT -> {
-                modeController.addPoint(finalX, finalY, pointZ)
+                modeController.addPoint(finalLocalX, finalLocalY, pointZ)
                 syncModeState()
             }
             MapMode.MEASURE -> {
-                modeController.addPoint(finalX, finalY, pointZ)
+                modeController.addPoint(finalLocalX, finalLocalY, pointZ)
                 syncModeState()
             }
             MapMode.ID_POINT -> {
-                modeController.addPoint(finalX, finalY, pointZ)
+                 modeController.addPoint(finalLocalX, finalLocalY, pointZ)
                 _uiState.value = _uiState.value.copy(
-                    tapLocalX = finalX,
-                    tapLocalY = finalY,
+                    tapLocalX = finalLocalX,
+                    tapLocalY = finalLocalY,
+                    tapProjectedX = finalProjectedX,
+                    tapProjectedY = finalProjectedY,
                     tapZ = pointZ,
                     idPointMarker = modeController.idPointMarker,
                     isSnapped = isSnapped

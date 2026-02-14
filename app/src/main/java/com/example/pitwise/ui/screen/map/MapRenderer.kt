@@ -256,30 +256,29 @@ fun MapRenderer(
 
 private fun DrawScope.drawDxfPaths(geometry: DxfGeometry, mapScale: Float, validated: MutableSet<String> = mutableSetOf()) {
     // 1. Draw Lines/Polylines (Grouped by Color)
-    // DEBUG: Force visible stroke width (3px) regardless of scale
-    val strokeWidth = 3f 
+    val strokeWidth = maxOf(1.5f / mapScale, 0.5f)
     
     // One-time render validation
     if ("dxf" !in validated) {
         validated.add("dxf")
-        Log.d("DXF_RENDER_VALIDATE", "Drawing: paths=${geometry.paths.size} EXPECTED_STROKE=3px scale=$mapScale")
+        Log.d("DXF_RENDER_VALIDATE", "Drawing: paths=${geometry.paths.size} strokeWidth=$strokeWidth scale=$mapScale")
         geometry.paths.entries.firstOrNull()?.let { (colorInt, _) ->
-            Log.d("DXF_RENDER_VALIDATE", "First path ORIGINAL color: 0x${Integer.toHexString(colorInt)}")
+            Log.d("DXF_RENDER_VALIDATE", "First path color: 0x${Integer.toHexString(colorInt)}")
         }
     }
     
     geometry.paths.forEach { (colorInt, path) ->
         drawPath(
             path = path,
-            color = Color.Magenta, // DEBUG: Force Magenta to rule out invisible colors
+            color = Color(colorInt),
             style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth)
         )
     }
 
     // 2. Draw Points (Grouped by Color)
-    val pointRadius = 6f // DEBUG: Force visible points
+    val pointRadius = maxOf(3f / mapScale, 1.5f)
     geometry.points.forEach { (colorInt, pointsList) ->
-        val pointColor = Color.Magenta // DEBUG: Force Magenta
+        val pointColor = Color(colorInt)
         pointsList.forEach { point ->
             drawCircle(
                 color = pointColor, 

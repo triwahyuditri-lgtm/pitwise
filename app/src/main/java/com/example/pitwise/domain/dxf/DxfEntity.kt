@@ -6,27 +6,31 @@ package com.example.pitwise.domain.dxf
 sealed class DxfEntity {
     abstract val layer: String
     abstract val color: Int
+    abstract val isByBlock: Boolean
 
     data class Point(
         val x: Double,
         val y: Double,
         val z: Double = 0.0,
         override val layer: String,
-        override val color: Int
+        override val color: Int,
+        override val isByBlock: Boolean = false
     ) : DxfEntity()
 
     data class Line(
         val start: DxfVertex,
         val end: DxfVertex,
         override val layer: String,
-        override val color: Int
+        override val color: Int,
+        override val isByBlock: Boolean = false
     ) : DxfEntity()
 
     data class Polyline(
         val vertices: List<DxfVertex>,
         val isClosed: Boolean,
         override val layer: String,
-        override val color: Int
+        override val color: Int,
+        override val isByBlock: Boolean = false
     ) : DxfEntity()
 
     data class Insert(
@@ -37,7 +41,8 @@ sealed class DxfEntity {
         val scaleZ: Double = 1.0,
         val rotation: Double = 0.0,
         override val layer: String,
-        override val color: Int
+        override val color: Int,
+        override val isByBlock: Boolean = false
     ) : DxfEntity()
 
     fun transform(

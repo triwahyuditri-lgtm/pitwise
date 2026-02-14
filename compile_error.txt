@@ -1,0 +1,107 @@
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :app:kspDebugKotlin UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+
+> Task :app:compileDebugKotlin FAILED
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:36:42 Unresolved reference 'GeoPdfMetadata'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:90:89 Unresolved reference 'GeoPdfMetadata'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:123:8 Unresolved reference 'GeoPdfMetadata'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:134:42 Unresolved reference 'WorldPoint'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:137:34 Unresolved reference 'WorldPoint'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:145:41 Unresolved reference 'PixelPoint'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:148:33 Unresolved reference 'PixelPoint'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:166:13 Unresolved reference 'ProjectionInfo'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:168:24 Unresolved reference 'ProjectionType'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:178:33 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:178:33 Not enough information to infer type argument for 'T'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:178:33 Not enough information to infer type argument for 'R'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:178:37 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:178:42 Unresolved reference 'x'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:179:33 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:179:33 Not enough information to infer type argument for 'T'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:179:33 Not enough information to infer type argument for 'R'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:179:37 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:179:42 Unresolved reference 'y'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:180:22 Unresolved reference 'BoundingBox'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:187:16 Unresolved reference 'GeoPdfMetadata'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:201:65 Unresolved reference 'ProjectionInfo'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:215:33 Unresolved reference 'ProjectionInfo'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:217:24 Unresolved reference 'ProjectionType'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:249:56 Unresolved reference 'ProjectionInfo'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:261:19 Unresolved reference 'ProjectionType'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:266:20 Unresolved reference 'ProjectionType'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:275:24 Unresolved reference 'ProjectionType'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:278:24 Unresolved reference 'ProjectionType'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:281:24 Unresolved reference 'ProjectionType'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:284:24 Unresolved reference 'ProjectionType'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:288:16 Unresolved reference 'ProjectionInfo'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:306:57 Unresolved reference 'ProjectionInfo'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:310:16 Unresolved reference 'ProjectionInfo'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:312:20 Unresolved reference 'ProjectionType'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:321:65 Unresolved reference 'ProjectionInfo'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:326:60 Unresolved reference 'ProjectionType'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:327:59 Unresolved reference 'ProjectionType'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:328:64 Unresolved reference 'ProjectionType'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:329:21 Unresolved reference 'ProjectionType'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:332:16 Unresolved reference 'ProjectionInfo'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:360:91 Unresolved reference 'GeoPdfMetadata'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:378:42 Unresolved reference 'WorldPoint'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:381:34 Unresolved reference 'WorldPoint'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:389:41 Unresolved reference 'PixelPoint'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:392:33 Unresolved reference 'PixelPoint'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:405:13 Unresolved reference 'ProjectionInfo'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:407:24 Unresolved reference 'ProjectionType'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:412:33 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:412:33 Not enough information to infer type argument for 'T'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:412:33 Not enough information to infer type argument for 'R'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:412:37 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:412:42 Unresolved reference 'x'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:413:33 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:413:33 Not enough information to infer type argument for 'T'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:413:33 Not enough information to infer type argument for 'R'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:413:37 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:413:42 Unresolved reference 'y'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:414:22 Unresolved reference 'BoundingBox'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:421:16 Unresolved reference 'GeoPdfMetadata'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:435:60 Unresolved reference 'ProjectionInfo'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:442:60 Unresolved reference 'ProjectionType'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:444:75 Unresolved reference 'ProjectionType'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:445:64 Unresolved reference 'ProjectionType'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:446:65 Unresolved reference 'ProjectionType'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:447:21 Unresolved reference 'ProjectionType'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:455:16 Unresolved reference 'ProjectionInfo'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:480:8 Unresolved reference 'GeoPdfMetadata'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfParser.kt:491:8 Unresolved reference 'GeoPdfMetadata'.
+e: file:///D:/MyApplication2/app/src/main/java/com/example/pitwise/domain/geopdf/GeoPdfRepository.kt:26:26 Unresolved reference 'GeoPdfParser'.
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileDebugKotlin'.
+> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+   > Compilation error. See log for more details
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 2s
+17 actionable tasks: 1 executed, 16 up-to-date

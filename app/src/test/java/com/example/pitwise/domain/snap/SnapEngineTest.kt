@@ -11,9 +11,9 @@ class SnapEngineTest {
         val index = GridSpatialIndex(cellSize = 10.0)
         index.build(vertices)
         
-        val engine = SnapEngine(index, snapThresholdMeters = 2.0)
+        val engine = SnapEngine(index)
         
-        val result = engine.findVertex(10.0, 10.0)
+        val result = engine.findVertex(10.0, 10.0, 2.0)
         assertNotNull(result)
         assertEquals(10.0, result!!.vertex.x, 0.001)
         assertEquals(0.0, result.distance, 0.001)
@@ -24,10 +24,10 @@ class SnapEngineTest {
         val vertices = listOf(DxfVertex(10.0, 10.0))
         val index = GridSpatialIndex()
         index.build(vertices)
-        val engine = SnapEngine(index, snapThresholdMeters = 2.0)
+        val engine = SnapEngine(index)
 
-        // 1.5m away -> Should snap
-        val result = engine.findVertex(11.5, 10.0)
+        // 1.5m away -> Should snap with 2.0 radius
+        val result = engine.findVertex(11.5, 10.0, 2.0)
         assertNotNull("Should snap within threshold", result)
         assertEquals(1.5, result!!.distance, 0.001)
     }
@@ -37,10 +37,10 @@ class SnapEngineTest {
         val vertices = listOf(DxfVertex(10.0, 10.0))
         val index = GridSpatialIndex()
         index.build(vertices)
-        val engine = SnapEngine(index, snapThresholdMeters = 2.0)
+        val engine = SnapEngine(index)
 
-        // 2.5m away -> Should NOT snap
-        val result = engine.findVertex(12.5, 10.0)
+        // 2.5m away -> Should NOT snap with 2.0 radius
+        val result = engine.findVertex(12.5, 10.0, 2.0)
         assertNull("Should not snap outside threshold", result)
     }
 
@@ -53,10 +53,10 @@ class SnapEngineTest {
         )
         val index = GridSpatialIndex()
         index.build(vertices)
-        val engine = SnapEngine(index, snapThresholdMeters = 5.0)
+        val engine = SnapEngine(index)
 
-        // Query at (10.5, 10) -> Closer to A (dist 0.5) vs B (dist 1.5)
-        val result = engine.findVertex(10.5, 10.0)
+        // Query at (10.5, 10) with 5.0 radius -> Closer to A (dist 0.5) vs B (dist 1.5)
+        val result = engine.findVertex(10.5, 10.0, 5.0)
         assertNotNull(result)
         assertEquals(10.0, result!!.vertex.x, 0.001)
     }
@@ -72,7 +72,7 @@ class SnapEngineTest {
         }
         
         val index = GridSpatialIndex()
-        val engine = SnapEngine(index) // Default 2m threshold
+        val engine = SnapEngine(index)
         
         val startTime = System.currentTimeMillis()
         engine.updateVertices(vertices)
@@ -81,7 +81,7 @@ class SnapEngineTest {
         
         // Query
         val qStart = System.currentTimeMillis()
-        val res = engine.findVertex(500.1, 50.1)
+        val res = engine.findVertex(500.1, 50.1, 2.0)
         val qTime = System.currentTimeMillis() - qStart
         println("Query time: ${qTime}ms")
         

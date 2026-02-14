@@ -62,6 +62,33 @@ data class GeoAffineTransform(
         )
     }
 
+    /**
+     * Calculate the Root Mean Square Error (RMSE) of this transform against a set of control points.
+     * Lower values indicate a better fit.
+     */
+    fun calculateRMSE(
+        src: List<Pair<Double, Double>>,
+        dst: List<Pair<Double, Double>>
+    ): Double {
+        if (src.isEmpty() || src.size != dst.size) return Double.MAX_VALUE
+
+        var sumSqErr = 0.0
+        for (i in src.indices) {
+            val (sx, sy) = src[i]
+            val (dx, dy) = dst[i]
+            
+            // Apply transform
+            val (txX, txY) = transform(sx, sy)
+            
+            // Squared Euclidean distance between expected (dst) and actual (tx)
+            val errX = txX - dx
+            val errY = txY - dy
+            sumSqErr += (errX * errX) + (errY * errY)
+        }
+
+        return kotlin.math.sqrt(sumSqErr / src.size)
+    }
+
     companion object {
 
         /**

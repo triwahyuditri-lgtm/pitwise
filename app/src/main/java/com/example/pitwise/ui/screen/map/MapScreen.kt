@@ -454,7 +454,7 @@ fun MapScreen(
                 ) {
                     Column {
                         Text(
-                            "X: ${"%.1f".format(uiState.tapLocalX ?: 0.0)}  Y: ${"%.1f".format(uiState.tapLocalY ?: 0.0)}",
+                            "X: ${"%.1f".format(uiState.tapProjectedX ?: 0.0)}  Y: ${"%.1f".format(uiState.tapProjectedY ?: 0.0)}",
                             color = Color.White,
                             style = MaterialTheme.typography.bodySmall
                         )

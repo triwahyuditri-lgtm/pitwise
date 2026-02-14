@@ -364,7 +364,7 @@ class DxfParser @Inject constructor() {
         colorIndex: Int?, 
         trueColor: Int?, 
         layers: Map<String, DxfLayer>
-    ): Int? {
+    ): Pair<Int, Boolean>? {
         // If entity explicitly says "invisible" via negative color, we skip it?
         // User says: "If group 62 value negative: Entity is invisible -> skip rendering."
         if (colorIndex != null && colorIndex < 0) return null
@@ -378,7 +378,10 @@ class DxfParser @Inject constructor() {
         
         val layerColor = layer?.colorIndex ?: 7
         
-        return DxfColorResolver.resolveColor(trueColor, colorIndex, layerColor)
+        val resolved = DxfColorResolver.resolveColor(trueColor, colorIndex, layerColor)
+        val isByBlock = (colorIndex == 0)
+        
+        return resolved to isByBlock
     }
 
     private fun parseLine(
@@ -412,14 +415,16 @@ class DxfParser @Inject constructor() {
             i += 2
         }
         
-        val color = ensureColor(layer, colorIndex, trueColor, layers)
-        if (color == null) return null to i
+        val result = ensureColor(layer, colorIndex, trueColor, layers)
+        if (result == null) return null to i
+        val (color, isByBlock) = result
         
         return DxfEntity.Line(
             DxfVertex(x1, y1, z1),
             DxfVertex(x2, y2, z2),
             layer,
-            color
+            color,
+            isByBlock
         ) to i
     }
     
@@ -480,10 +485,11 @@ class DxfParser @Inject constructor() {
             i += 2
         }
         
-        val color = ensureColor(layer, colorIndex, trueColor, layers)
-        if (color == null || vertices.isEmpty()) return null to i
+        val result = ensureColor(layer, colorIndex, trueColor, layers)
+        if (result == null || vertices.isEmpty()) return null to i
+        val (color, isByBlock) = result
         
-        return DxfEntity.Polyline(vertices, isClosed, layer, color) to i
+        return DxfEntity.Polyline(vertices, isClosed, layer, color, isByBlock) to i
     }
     
     private fun parsePolyline(
@@ -555,14 +561,15 @@ class DxfParser @Inject constructor() {
             }
         }
         
-        val color = ensureColor(layer, colorIndex, trueColor, layers)
-        if (color == null || vertices.isEmpty()) return null to i
+        val result = ensureColor(layer, colorIndex, trueColor, layers)
+        if (result == null || vertices.isEmpty()) return null to i
+        val (color, isByBlock) = result
         
-        return DxfEntity.Polyline(vertices, isClosed, layer, color) to i
+        return DxfEntity.Polyline(vertices, isClosed, layer, color, isByBlock) to i
     }
     
     // Internal temp classes for Circle/Arc parsing before conversion
-    private data class TempCircle(val cx: Double, val cy: Double, val r: Double, val layer: String, val color: Int) {
+    private data class TempCircle(val cx: Double, val cy: Double, val r: Double, val layer: String, val color: Int, val isByBlock: Boolean) {
         fun toPolyline(): DxfEntity.Polyline {
             val vertices = mutableListOf<DxfVertex>()
             val segments = 36
@@ -571,11 +578,11 @@ class DxfParser @Inject constructor() {
                 vertices.add(DxfVertex(cx + r * Math.cos(angle), cy + r * Math.sin(angle), 0.0))
             }
             vertices.add(vertices.first()) // Close it
-            return DxfEntity.Polyline(vertices, true, layer, color)
+            return DxfEntity.Polyline(vertices, true, layer, color, isByBlock)
         }
     }
 
-    private data class TempArc(val cx: Double, val cy: Double, val r: Double, val startAngle: Double, val endAngle: Double, val layer: String, val color: Int) {
+    private data class TempArc(val cx: Double, val cy: Double, val r: Double, val startAngle: Double, val endAngle: Double, val layer: String, val color: Int, val isByBlock: Boolean) {
         fun toPolyline(): DxfEntity.Polyline {
             val vertices = mutableListOf<DxfVertex>()
             var start = startAngle
@@ -589,7 +596,7 @@ class DxfParser @Inject constructor() {
                 val angle = Math.toRadians(start + (sweep * i / segments))
                 vertices.add(DxfVertex(cx + r * Math.cos(angle), cy + r * Math.sin(angle), 0.0))
             }
-            return DxfEntity.Polyline(vertices, false, layer, color)
+            return DxfEntity.Polyline(vertices, false, layer, color, isByBlock)
         }
     }
 
@@ -613,8 +620,9 @@ class DxfParser @Inject constructor() {
             }
             i += 2
         }
-        val color = ensureColor(layer, colorIndex, trueColor, layers) ?: return null to i
-        return TempCircle(cx, cy, r, layer, color) to i
+        val result = ensureColor(layer, colorIndex, trueColor, layers) ?: return null to i
+        val (color, isByBlock) = result
+        return TempCircle(cx, cy, r, layer, color, isByBlock) to i
     }
 
     private fun parseArc(
@@ -640,8 +648,9 @@ class DxfParser @Inject constructor() {
             }
             i += 2
         }
-        val color = ensureColor(layer, colorIndex, trueColor, layers) ?: return null to i
-        return TempArc(cx, cy, r, startAngle, endAngle, layer, color) to i
+        val result = ensureColor(layer, colorIndex, trueColor, layers) ?: return null to i
+        val (color, isByBlock) = result
+        return TempArc(cx, cy, r, startAngle, endAngle, layer, color, isByBlock) to i
     }
 
 
@@ -675,10 +684,11 @@ class DxfParser @Inject constructor() {
             i += 2
         }
         
-        val color = ensureColor(layer, colorIndex, trueColor, layers)
-        if (color == null) return null to i
+        val result = ensureColor(layer, colorIndex, trueColor, layers)
+        if (result == null) return null to i
+        val (color, isByBlock) = result
         
-        return DxfEntity.Point(x, y, z, layer, color) to i
+        return DxfEntity.Point(x, y, z, layer, color, isByBlock) to i
     }
 
     private fun parseInsert(
@@ -715,7 +725,8 @@ class DxfParser @Inject constructor() {
         }
 
         // Inserts can be on invisible layers too? yes.
-        val color = ensureColor(layer, colorIndex, trueColor, layers) ?: return null to i
+        val result = ensureColor(layer, colorIndex, trueColor, layers) ?: return null to i
+        val (color, isByBlock) = result
         
         return DxfEntity.Insert(
             blockName,
@@ -723,7 +734,8 @@ class DxfParser @Inject constructor() {
             scaleX, scaleY, scaleZ,
             rotation,
             layer,
-            color
+            color,
+            isByBlock
         ) to i
     }
 
@@ -747,7 +759,7 @@ class DxfParser @Inject constructor() {
                 if (blockEntities != null) {
                     // 1. Transform block entities by Insert's params
                     val transformed = blockEntities.map { child ->
-                        child.transform(
+                        val t = child.transform(
                             scaleX = e.scaleX,
                             scaleY = e.scaleY,
                             scaleZ = e.scaleZ,
@@ -756,8 +768,20 @@ class DxfParser @Inject constructor() {
                             ty = e.insertionPoint.y,
                             tz = e.insertionPoint.z
                         )
+                        
+                        // 2. Resolve ByBlock color
+                        // If child is ByBlock, it takes the Insert's color.
+                        val newColor = if (child.isByBlock) e.color else child.color
+                        
+                        // Apply new color
+                        when (t) {
+                            is DxfEntity.Line -> t.copy(color = newColor)
+                            is DxfEntity.Polyline -> t.copy(color = newColor)
+                            is DxfEntity.Point -> t.copy(color = newColor)
+                            is DxfEntity.Insert -> t.copy(color = newColor)
+                        }
                     }
-                    // 2. Recursively explode result (if it contains nested inserts)
+                    // 3. Recursively explode result (if it contains nested inserts)
                     result.addAll(explode(transformed, blocks, depth + 1))
                 }
             } else {
