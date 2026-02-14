@@ -1,7 +1,6 @@
 package com.example.pitwise.domain.map
 
-import com.example.pitwise.domain.dxf.DxfEntity
-import com.example.pitwise.domain.dxf.DxfParser
+import com.example.pitwise.domain.dxf.SimpleDxfParser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -10,11 +9,11 @@ import org.junit.Test
 
 class DxfParserTest {
 
-    private lateinit var parser: DxfParser
+    private lateinit var parser: SimpleDxfParser
 
     @Before
     fun setUp() {
-        parser = DxfParser()
+        parser = SimpleDxfParser()
     }
 
     @Test
@@ -45,17 +44,17 @@ class DxfParserTest {
         val result = parser.parse(dxf)
         assertEquals(1, result.lines.size)
 
-        val line = result.lines[0]
-        assertEquals(100.0, line.start.x, 0.001)
-        assertEquals(200.0, line.start.y, 0.001)
-        assertEquals(50.5, line.start.z, 0.001)
-        assertEquals(300.0, line.end.x, 0.001)
-        assertEquals(400.0, line.end.y, 0.001)
-        assertEquals(75.3, line.end.z, 0.001)
+        val (start, end) = result.lines[0]
+        assertEquals(100.0, start.x, 0.001)
+        assertEquals(200.0, start.y, 0.001)
+        assertEquals(50.5, start.z!!, 0.001)
+        assertEquals(300.0, end.x, 0.001)
+        assertEquals(400.0, end.y, 0.001)
+        assertEquals(75.3, end.z!!, 0.001)
     }
 
     @Test
-    fun `parse LINE without Z defaults to 0`() {
+    fun `parse LINE without Z defaults to null`() {
         val dxf = """
             0
             SECTION
@@ -76,9 +75,9 @@ class DxfParserTest {
         """.trimIndent()
 
         val result = parser.parse(dxf)
-        val line = result.lines[0]
-        assertEquals(0.0, line.start.z, 0.001)
-        assertEquals(0.0, line.end.z, 0.001)
+        val (start, end) = result.lines[0]
+        assertEquals(null, start.z)
+        assertEquals(null, end.z)
     }
 
     @Test
@@ -105,7 +104,7 @@ class DxfParserTest {
         val point = result.points[0]
         assertEquals(50.0, point.x, 0.001)
         assertEquals(60.0, point.y, 0.001)
-        assertEquals(42.5, point.z, 0.001)
+        assertEquals(42.5, point.z!!, 0.001)
     }
 
     @Test
@@ -136,10 +135,10 @@ class DxfParserTest {
         val result = parser.parse(dxf)
         assertEquals(1, result.polylines.size)
         val poly = result.polylines[0]
-        assertEquals(2, poly.vertices.size)
+        assertEquals(2, poly.size)
         // All vertices should inherit the elevation
-        assertEquals(100.0, poly.vertices[0].z, 0.001)
-        assertEquals(100.0, poly.vertices[1].z, 0.001)
+        assertEquals(100.0, poly[0].z!!, 0.001)
+        assertEquals(100.0, poly[1].z!!, 0.001)
     }
 
     @Test
@@ -178,9 +177,9 @@ class DxfParserTest {
         val result = parser.parse(dxf)
         assertEquals(1, result.polylines.size)
         val poly = result.polylines[0]
-        assertEquals(2, poly.vertices.size)
-        assertEquals(30.0, poly.vertices[0].z, 0.001)
-        assertEquals(60.0, poly.vertices[1].z, 0.001)
+        assertEquals(2, poly.size)
+        assertEquals(30.0, poly[0].z!!, 0.001)
+        assertEquals(60.0, poly[1].z!!, 0.001)
     }
 
     @Test
@@ -217,12 +216,12 @@ class DxfParserTest {
         val result = parser.parse(dxf)
         assertEquals(1, result.polylines.size)
         val poly = result.polylines[0]
-        assertEquals(99.0, poly.vertices[0].z, 0.001)
-        assertEquals(99.0, poly.vertices[1].z, 0.001)
+        assertEquals(99.0, poly[0].z!!, 0.001)
+        assertEquals(99.0, poly[1].z!!, 0.001)
     }
 
     @Test
-    fun `bounding box includes Z range`() {
+    fun `bounding box is computed correctly`() {
         val dxf = """
             0
             SECTION
@@ -249,8 +248,10 @@ class DxfParserTest {
         """.trimIndent()
 
         val result = parser.parse(dxf)
-        assertEquals(10.0, result.bounds.minZ, 0.001)
-        assertEquals(50.0, result.bounds.maxZ, 0.001)
+        assertEquals(0.0, result.bounds.minX, 0.001)
+        assertEquals(100.0, result.bounds.maxX, 0.001)
+        assertEquals(0.0, result.bounds.minY, 0.001)
+        assertEquals(100.0, result.bounds.maxY, 0.001)
     }
 
     @Test
@@ -303,8 +304,11 @@ class DxfParserTest {
         assertEquals(1, result.lines.size)
         assertEquals(1, result.polylines.size)
 
+        // Closed polyline includes closing vertex
         val poly = result.polylines[0]
-        assertTrue(poly.isClosed)
+        assertEquals(3, poly.size) // 2 vertices + closing duplicate
+        assertEquals(poly.first().x, poly.last().x, 0.001)
+        assertEquals(poly.first().y, poly.last().y, 0.001)
     }
 
     @Test
@@ -323,13 +327,11 @@ class DxfParserTest {
         assertTrue(result.polylines.isEmpty())
         assertTrue(result.points.isEmpty())
         assertEquals(0.0, result.bounds.minX, 0.001)
-        assertEquals(0.0, result.bounds.minZ, 0.001)
+        assertEquals(1.0, result.bounds.maxX, 0.001)
     }
 
     @Test
     fun `parse LWPOLYLINE with per-vertex Z code 30 after code 20`() {
-        // This tests the deferred vertex assembly fix:
-        // DXF files may have code 30 (Z) after code 20 (Y)
         val dxf = """
             0
             SECTION
@@ -358,15 +360,13 @@ class DxfParserTest {
         val result = parser.parse(dxf)
         assertEquals(1, result.polylines.size)
         val poly = result.polylines[0]
-        assertEquals(2, poly.vertices.size)
-        // Each vertex should have its own Z value
-        assertEquals(50.5, poly.vertices[0].z, 0.001)
-        assertEquals(75.3, poly.vertices[1].z, 0.001)
+        assertEquals(2, poly.size)
+        assertEquals(50.5, poly[0].z!!, 0.001)
+        assertEquals(75.3, poly[1].z!!, 0.001)
     }
 
     @Test
     fun `parse LWPOLYLINE with Z before Y still works`() {
-        // Ensure normal ordering (10, 30, 20) also works
         val dxf = """
             0
             SECTION
@@ -395,8 +395,8 @@ class DxfParserTest {
         val result = parser.parse(dxf)
         assertEquals(1, result.polylines.size)
         val poly = result.polylines[0]
-        assertEquals(2, poly.vertices.size)
-        assertEquals(10.0, poly.vertices[0].z, 0.001)
-        assertEquals(20.0, poly.vertices[1].z, 0.001)
+        assertEquals(2, poly.size)
+        assertEquals(10.0, poly[0].z!!, 0.001)
+        assertEquals(20.0, poly[1].z!!, 0.001)
     }
 }

@@ -13,8 +13,7 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import com.example.pitwise.data.local.entity.MapAnnotation
 import com.example.pitwise.domain.map.DrawingMode
-import com.example.pitwise.domain.dxf.DxfEntity
-import com.example.pitwise.domain.dxf.DxfModel
+import com.example.pitwise.domain.dxf.SimpleDxfModel
 import com.example.pitwise.domain.map.MapPoint
 import com.example.pitwise.domain.map.MapSerializationUtils
 
@@ -26,7 +25,7 @@ fun MapContent(
     offsetX: Float,
     offsetY: Float,
     pdfBitmap: Bitmap?,
-    dxfModel: DxfModel?,
+    dxfModel: SimpleDxfModel?,
     showPdfLayer: Boolean = true,
     showDxfLayer: Boolean = true,
     annotations: List<MapAnnotation>,
@@ -57,35 +56,25 @@ fun MapContent(
         
         // ── DXF Layer ──
         if (showDxfLayer && dxfModel != null) {
+            val dxfColor = Color(0xFF00FF00)
             // Lines
-            for (line in dxfModel.lines) {
-                val color = Color(line.color)
+            for ((start, end) in dxfModel.lines) {
                 drawLine(
-                    color = color,
-                    start = Offset((line.start.x * scale).toFloat() + offsetX, (line.start.y * scale).toFloat() + offsetY),
-                    end = Offset((line.end.x * scale).toFloat() + offsetX, (line.end.y * scale).toFloat() + offsetY),
+                    color = dxfColor,
+                    start = Offset((start.x * scale).toFloat() + offsetX, (start.y * scale).toFloat() + offsetY),
+                    end = Offset((end.x * scale).toFloat() + offsetX, (end.y * scale).toFloat() + offsetY),
                     strokeWidth = 1.5f
                 )
             }
 
             // Polylines
             for (poly in dxfModel.polylines) {
-                val color = Color(poly.color)
-                val verts = poly.vertices
-                if (verts.isNotEmpty()) {
-                    for (i in 0 until verts.size - 1) {
+                if (poly.isNotEmpty()) {
+                    for (i in 0 until poly.size - 1) {
                          drawLine(
-                            color = color,
-                            start = Offset((verts[i].x * scale).toFloat() + offsetX, (verts[i].y * scale).toFloat() + offsetY),
-                            end = Offset((verts[i + 1].x * scale).toFloat() + offsetX, (verts[i + 1].y * scale).toFloat() + offsetY),
-                            strokeWidth = 1.5f
-                        )
-                    }
-                    if (poly.isClosed && verts.size > 2) {
-                        drawLine(
-                            color = color,
-                            start = Offset((verts.last().x * scale).toFloat() + offsetX, (verts.last().y * scale).toFloat() + offsetY),
-                            end = Offset((verts.first().x * scale).toFloat() + offsetX, (verts.first().y * scale).toFloat() + offsetY),
+                            color = dxfColor,
+                            start = Offset((poly[i].x * scale).toFloat() + offsetX, (poly[i].y * scale).toFloat() + offsetY),
+                            end = Offset((poly[i + 1].x * scale).toFloat() + offsetX, (poly[i + 1].y * scale).toFloat() + offsetY),
                             strokeWidth = 1.5f
                         )
                     }
@@ -94,10 +83,9 @@ fun MapContent(
 
             // Points
             for (point in dxfModel.points) {
-                val color = Color(point.color)
                 val sx = (point.x * scale).toFloat() + offsetX
                 val sy = (point.y * scale).toFloat() + offsetY
-                drawCircle(color = color, radius = 3f, center = Offset(sx, sy))
+                drawCircle(color = dxfColor, radius = 3f, center = Offset(sx, sy))
             }
         }
 

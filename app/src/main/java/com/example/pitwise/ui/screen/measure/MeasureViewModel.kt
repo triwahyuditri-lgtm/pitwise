@@ -6,8 +6,8 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.pitwise.data.local.entity.MapAnnotation
-import com.example.pitwise.domain.dxf.DxfModel
-import com.example.pitwise.domain.dxf.DxfParser
+import com.example.pitwise.domain.dxf.SimpleDxfModel
+import com.example.pitwise.domain.dxf.SimpleDxfParser
 import com.example.pitwise.domain.map.MapPoint
 import com.example.pitwise.domain.map.MapRepository
 import com.example.pitwise.domain.map.PdfRendererEngine
@@ -38,7 +38,7 @@ data class MeasureUiState(
     
     // Map Background
     val pdfBitmap: Bitmap? = null,
-    val dxfModel: DxfModel? = null,
+    val dxfModel: SimpleDxfModel? = null,
     val isLoadingMap: Boolean = false
 )
 
@@ -47,7 +47,7 @@ class MeasureViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val mapRepository: MapRepository,
     private val pdfRenderer: PdfRendererEngine,
-    private val dxfParser: DxfParser
+    private val dxfParser: SimpleDxfParser
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MeasureUiState())

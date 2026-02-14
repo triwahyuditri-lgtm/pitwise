@@ -13,9 +13,8 @@ import com.example.pitwise.data.local.entity.MapAnnotation
 import com.example.pitwise.data.local.entity.MapEntry
 import com.example.pitwise.domain.map.CoordinateFormat
 import com.example.pitwise.domain.map.CoordinateUtils
-import com.example.pitwise.domain.dxf.DxfEntity
-import com.example.pitwise.domain.dxf.DxfModel
-import com.example.pitwise.domain.dxf.DxfParser
+import com.example.pitwise.domain.dxf.SimpleDxfModel
+import com.example.pitwise.domain.dxf.SimpleDxfParser
 import com.example.pitwise.domain.map.GpsCalibrationManager
 import com.example.pitwise.domain.map.LiveMeasurement
 import com.example.pitwise.domain.map.MapMode
@@ -56,7 +55,7 @@ import android.util.Log
 data class MapUiState(
     // Map source data
     val mapEntry: MapEntry? = null,
-    val dxfModel: DxfModel? = null,
+    val dxfModel: SimpleDxfModel? = null,
     val pdfBitmap: Bitmap? = null,
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
@@ -131,7 +130,7 @@ data class MapUiState(
 class MapViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val mapRepository: MapRepository,
-    private val dxfParser: DxfParser,
+    private val dxfParser: SimpleDxfParser,
     private val pdfRenderer: PdfRendererEngine,
     private val gpsCalibrationManager: GpsCalibrationManager,
     private val geoPdfRepository: GeoPdfRepository,
@@ -254,12 +253,12 @@ class MapViewModel @Inject constructor(
                     dxf.points.forEach { p ->
                         vertices.add(com.example.pitwise.domain.snap.DxfVertex(p.x, p.y, p.z))
                     }
-                    dxf.lines.forEach { l ->
-                        vertices.add(com.example.pitwise.domain.snap.DxfVertex(l.start.x, l.start.y, l.start.z))
-                        vertices.add(com.example.pitwise.domain.snap.DxfVertex(l.end.x, l.end.y, l.end.z))
+                    dxf.lines.forEach { (start, end) ->
+                        vertices.add(com.example.pitwise.domain.snap.DxfVertex(start.x, start.y, start.z))
+                        vertices.add(com.example.pitwise.domain.snap.DxfVertex(end.x, end.y, end.z))
                     }
-                    dxf.polylines.forEach { p ->
-                        p.vertices.forEach { v ->
+                    dxf.polylines.forEach { poly ->
+                        poly.forEach { v ->
                             vertices.add(com.example.pitwise.domain.snap.DxfVertex(v.x, v.y, v.z))
                         }
                     }
@@ -756,7 +755,7 @@ class MapViewModel @Inject constructor(
     // Helpers
     // ════════════════════════════════════════════════════
 
-    private fun findNearestZ(x: Double, y: Double, dxf: DxfModel?): Double? {
+    private fun findNearestZ(x: Double, y: Double, dxf: SimpleDxfModel?): Double? {
         if (dxf == null) return null
         var minDist = Double.MAX_VALUE
         var bestZ: Double? = null
@@ -766,15 +765,15 @@ class MapViewModel @Inject constructor(
             if (d < minDist) { minDist = d; bestZ = p.z }
         }
 
-        dxf.lines.forEach { l ->
-            val d1 = sqrt((l.start.x - x) * (l.start.x - x) + (l.start.y - y) * (l.start.y - y))
-            val d2 = sqrt((l.end.x - x) * (l.end.x - x) + (l.end.y - y) * (l.end.y - y))
-            if (d1 < minDist) { minDist = d1; bestZ = l.start.z }
-            if (d2 < minDist) { minDist = d2; bestZ = l.end.z }
+        dxf.lines.forEach { (start, end) ->
+            val d1 = sqrt((start.x - x) * (start.x - x) + (start.y - y) * (start.y - y))
+            val d2 = sqrt((end.x - x) * (end.x - x) + (end.y - y) * (end.y - y))
+            if (d1 < minDist) { minDist = d1; bestZ = start.z }
+            if (d2 < minDist) { minDist = d2; bestZ = end.z }
         }
 
-        dxf.polylines.forEach { p ->
-            p.vertices.forEach { v ->
+        dxf.polylines.forEach { poly ->
+            poly.forEach { v ->
                 val d = sqrt((v.x - x) * (v.x - x) + (v.y - y) * (v.y - y))
                 if (d < minDist) { minDist = d; bestZ = v.z }
             }
