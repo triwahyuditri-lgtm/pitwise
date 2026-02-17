@@ -113,9 +113,20 @@ class ProductivityViewModel @Inject constructor(
             )
 
             if (spec != null) {
+                // For Hauler: use vessel_bcm_or_ton as the capacity
+                // For Loader/Dozer: use bucketCapacityLcm or vesselCapacityM3
+                val capacity = when (state.unitType) {
+                    UnitType.HAULER -> spec.vesselCapacityTon ?: spec.vesselCapacityM3 ?: 0.0
+                    else -> spec.bucketCapacityLcm ?: spec.vesselCapacityM3 ?: 0.0
+                }
+                // Haulers use fillFactor=1.0 (vessel_bcm_or_ton = actual payload)
+                val fillFactor = when (state.unitType) {
+                    UnitType.HAULER -> 1.0
+                    else -> spec.fillFactorDefault ?: 0.85
+                }
                 _uiState.value = _uiState.value.copy(
-                    bucketCapacity = (spec.bucketCapacityM3 ?: spec.vesselCapacityM3 ?: 0.0).toString(),
-                    fillFactor = (spec.fillFactorDefault ?: 0.85).toString(),
+                    bucketCapacity = capacity.toString(),
+                    fillFactor = fillFactor.toString(),
                     cycleTime = (spec.cycleTimeRefSec ?: 0.0).toString()
                 )
             }

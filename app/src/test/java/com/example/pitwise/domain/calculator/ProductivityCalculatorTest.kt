@@ -20,7 +20,7 @@ class ProductivityCalculatorTest {
             effectiveWorkingHours = 8.0,
             targetProduction = 1500.0
         )
-        val result = calculator.calculate(input)
+        val result = calculator.calculate(input)!!
 
         // Prod/hr = (2.4 * 0.80 * 3600) / 32 = 216 BCM/hr
         // Total = 216 * 8 = 1728 BCM
@@ -39,7 +39,7 @@ class ProductivityCalculatorTest {
             effectiveWorkingHours = 7.0,
             targetProduction = 700.0
         )
-        val result = calculator.calculate(input)
+        val result = calculator.calculate(input)!!
 
         // Prod/hr = (0.93 * 0.85 * 3600) / 30 = 94.86 BCM/hr
         // Total = 94.86 * 7 = 664.02
@@ -59,7 +59,7 @@ class ProductivityCalculatorTest {
             effectiveWorkingHours = 6.0,
             targetProduction = 600.0
         )
-        val result = calculator.calculate(input)
+        val result = calculator.calculate(input)!!
 
         // Prod/hr = (1.2 * 0.70 * 3600) / 40 = 75.6 BCM/hr
         // Total = 75.6 * 6 = 453.6
@@ -79,7 +79,7 @@ class ProductivityCalculatorTest {
             effectiveWorkingHours = 10.0,
             targetProduction = 1000.0
         )
-        val result = calculator.calculate(input)
+        val result = calculator.calculate(input)!!
 
         // Prod/hr = (1.0 * 1.0 * 3600) / 36 = 100
         // Total = 100 * 10 = 1000

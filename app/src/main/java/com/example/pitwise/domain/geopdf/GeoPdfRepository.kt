@@ -100,6 +100,14 @@ class GeoPdfRepository @Inject constructor(
     }
 
     /**
+     * Convert PDF pixel coordinate to projected CRS coordinate (e.g., UTM meters).
+     * Used for accurate distance/area calculations on PDF maps.
+     */
+    fun pixelToProjected(pixelX: Double, pixelY: Double): Pair<Double, Double>? {
+        return engine.pixelToProjected(pixelX, pixelY)
+    }
+
+    /**
      * Convert screen coordinate directly to GPS position.
      * Inverse of [gpsToScreen].
      */
@@ -122,6 +130,14 @@ class GeoPdfRepository @Inject constructor(
      */
     fun getDebugInfo(lat: Double, lng: Double): GeoPdfDebugInfo? {
         return engine.getDebugInfo(lat, lng)
+    }
+
+    /**
+     * Set the render DPI to match bitmap output.
+     * Must be called after [parseAndInitialize] succeeds.
+     */
+    fun setRenderDpi(dpi: Int) {
+        engine.setRenderDpi(dpi)
     }
 
     /**

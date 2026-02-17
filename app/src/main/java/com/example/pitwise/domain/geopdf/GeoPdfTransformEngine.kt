@@ -1,5 +1,6 @@
 package com.example.pitwise.domain.geopdf
 
+import android.util.Log
 import androidx.compose.ui.geometry.Offset
 
 /**
@@ -22,6 +23,7 @@ class GeoPdfTransformEngine {
     private var metadata: GeoPdfMetadata? = null
     private var crsConverter: CrsConverter? = null
     private var affineTransform: GeoAffineTransform? = null
+    private var dpiScale: Double = 1.0  // Ratio of render DPI to PDF's native 72 DPI
 
     /** Whether the engine is fully initialized and ready for transforms. */
     val isInitialized: Boolean
@@ -68,14 +70,16 @@ class GeoPdfTransformEngine {
             val projected = converter.convert(gpt.x, gpt.y)
             srcPoints.add(Pair(projected.x, projected.y))
 
-            // LPTS: denormalize if needed (convert 0-1 → PDF page coordinates)
+            // LPTS: denormalize using viewport BBox coordinates
+            // In OGC format, LPTS are relative to the viewport BBox, not the full page.
+            // For normalized LPTS (0-1): map to BBox area
+            // For non-normalized LPTS: already in PDF user-space coordinates
             val pixelX: Double
             val pixelY: Double
             if (geoPdfMetadata.lptsNormalized) {
-                pixelX = lpt.x * geoPdfMetadata.pageWidth
-                // In normalized LPTS, Y=0 means top of page, Y=1 means bottom
-                // This matches screen coordinates (origin at top-left)
-                pixelY = lpt.y * geoPdfMetadata.pageHeight
+                // Map normalized LPTS (0-1) to viewport BBox area
+                pixelX = geoPdfMetadata.bboxX + lpt.x * geoPdfMetadata.bboxWidth
+                pixelY = geoPdfMetadata.bboxY + lpt.y * geoPdfMetadata.bboxHeight
             } else {
                 pixelX = lpt.x
                 pixelY = lpt.y
@@ -88,27 +92,62 @@ class GeoPdfTransformEngine {
 
         this.affineTransform = affine
 
+        // Debug: Dump initialization data to logcat for GPS accuracy diagnosis
+        Log.d("GeoPdfEngine", "═══ GeoPDF Transform Engine Initialized ═══")
+        Log.d("GeoPdfEngine", "Page: ${geoPdfMetadata.pageWidth} x ${geoPdfMetadata.pageHeight} pts")
+        Log.d("GeoPdfEngine", "BBox: origin=(${geoPdfMetadata.bboxX}, ${geoPdfMetadata.bboxY}), size=${geoPdfMetadata.bboxWidth} x ${geoPdfMetadata.bboxHeight}")
+        Log.d("GeoPdfEngine", "LPTS normalized: ${geoPdfMetadata.lptsNormalized}")
+        Log.d("GeoPdfEngine", "DPI scale: $dpiScale")
+        Log.d("GeoPdfEngine", "Control points (${geoPdfMetadata.gpts.size}):")
+        for (i in geoPdfMetadata.gpts.indices) {
+            val gpt = geoPdfMetadata.gpts[i]
+            val lpt = geoPdfMetadata.lpts[i]
+            val src = srcPoints[i]
+            val dst = dstPoints[i]
+            Log.d("GeoPdfEngine", "  [$i] GPTS(lat=${gpt.x}, lng=${gpt.y}) → Projected(${src.first}, ${src.second}) | LPTS(${lpt.x}, ${lpt.y}) → Dst(${dst.first}, ${dst.second})")
+        }
+        Log.d("GeoPdfEngine", "Affine: ${affine.toDebugString()}")
+
         return GeoPdfValidationResult.Valid(geoPdfMetadata)
+    }
+
+    /**
+     * Set the render DPI to match the bitmap output from PdfRendererEngine.
+     *
+     * PDF coordinates are natively in points (1/72 inch). When the PDF is rendered
+     * to a bitmap at a higher DPI (e.g. 150), the bitmap pixels are scaled by
+     * dpi/72. This method stores that scale factor so gpsToPixel() returns
+     * coordinates in bitmap pixel space (matching the world coordinate system).
+     *
+     * @param dpi The render DPI used by PdfRendererEngine (default 150)
+     */
+    fun setRenderDpi(dpi: Int) {
+        dpiScale = dpi / 72.0
     }
 
     /**
      * Convert GPS position to PDF pixel coordinate.
      *
+     * Returns coordinates in bitmap pixel space (scaled by render DPI).
+     *
      * @param lat WGS84 latitude
      * @param lng WGS84 longitude
-     * @return Pixel coordinate in PDF page space, or null if engine not initialized
+     * @return Pixel coordinate in bitmap space, or null if engine not initialized
      */
     fun gpsToPixel(lat: Double, lng: Double): PixelPoint? {
         val converter = crsConverter ?: return null
         val affine = affineTransform ?: return null
+        val meta = metadata ?: return null
 
         // Step 1: WGS84 → Projected CRS
         val projected = converter.convert(lat, lng)
 
-        // Step 2: Projected → PDF pixel
-        val (pixelX, pixelY) = affine.transform(projected.x, projected.y)
+        // Step 2: Projected → PDF points (Y=0 at bottom of page)
+        val (pdfX, pdfY) = affine.transform(projected.x, projected.y)
 
-        return PixelPoint(pixelX, pixelY)
+        // Step 3: PDF points → Bitmap pixels
+        // PDF has Y=0 at bottom, bitmap has Y=0 at top → flip Y
+        return PixelPoint(pdfX * dpiScale, (meta.pageHeight - pdfY) * dpiScale)
     }
 
     /**
@@ -140,17 +179,49 @@ class GeoPdfTransformEngine {
     }
 
     /**
+     * Convert PDF pixel coordinate to projected CRS coordinate (e.g., UTM meters).
+     *
+     * Used for accurate distance/area calculations on PDF maps.
+     * Returns coordinates in the map's native projected CRS (typically UTM easting/northing
+     * in meters), which allows Euclidean distance and Shoelace area formulas to produce
+     * results directly in meters and square meters.
+     *
+     * @param pixelX Bitmap pixel X coordinate
+     * @param pixelY Bitmap pixel Y coordinate
+     * @return Projected coordinate (e.g., UTM easting, northing) in meters, or null if not initialized
+     */
+    fun pixelToProjected(pixelX: Double, pixelY: Double): Pair<Double, Double>? {
+        val affine = affineTransform ?: return null
+        val meta = metadata ?: return null
+
+        // Step 1: Bitmap pixels → PDF points
+        // Bitmap has Y=0 at top, PDF has Y=0 at bottom → flip Y
+        val pdfX = pixelX / dpiScale
+        val pdfY = meta.pageHeight - (pixelY / dpiScale)
+
+        // Step 2: PDF points → Projected CRS (e.g., UTM easting/northing in meters)
+        // Stop here — do NOT convert to WGS84 lat/lng
+        return affine.inverse(pdfX, pdfY)
+    }
+
+    /**
      * Convert PDF pixel coordinate to GPS position.
      * Inverse of [gpsToPixel].
      */
     fun pixelToGps(pixelX: Double, pixelY: Double): Pair<Double, Double>? {
         val converter = crsConverter ?: return null
         val affine = affineTransform ?: return null
+        val meta = metadata ?: return null
 
-        // Step 1: PDF pixel → Projected CRS
-        val (projX, projY) = affine.inverse(pixelX, pixelY) ?: return null
+        // Step 1: Bitmap pixels → PDF points
+        // Bitmap has Y=0 at top, PDF has Y=0 at bottom → flip Y
+        val pdfX = pixelX / dpiScale
+        val pdfY = meta.pageHeight - (pixelY / dpiScale)
 
-        // Step 2: Projected CRS → WGS84
+        // Step 2: PDF points → Projected CRS
+        val (projX, projY) = affine.inverse(pdfX, pdfY) ?: return null
+
+        // Step 3: Projected CRS → WGS84
         return converter.convertInverse(projX, projY)
     }
 
@@ -212,5 +283,6 @@ class GeoPdfTransformEngine {
         metadata = null
         crsConverter = null
         affineTransform = null
+        dpiScale = 1.0
     }
 }

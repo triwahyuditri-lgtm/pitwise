@@ -92,6 +92,19 @@ fun MapContent(
                             )
                         }
                     }
+                    is DxfEntity.Text -> {
+                        val sx = (entity.x * scale).toFloat() + offsetX
+                        val sy = (entity.y * scale).toFloat() + offsetY
+                        val textHeight = (entity.height * scale).toFloat().coerceIn(6f, 120f)
+                        val textPaint = Paint().apply {
+                            color = android.graphics.Color.rgb(200, 255, 220)
+                            textSize = textHeight
+                            isAntiAlias = true
+                        }
+                        drawIntoCanvas { canvas ->
+                            canvas.nativeCanvas.drawText(entity.text, sx, sy, textPaint)
+                        }
+                    }
                 }
             }
         }

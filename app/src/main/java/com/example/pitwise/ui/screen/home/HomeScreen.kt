@@ -1,5 +1,7 @@
 package com.example.pitwise.ui.screen.home
 
+import android.content.Context
+import android.location.LocationManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,6 +25,7 @@ import androidx.compose.material.icons.filled.GpsFixed
 import androidx.compose.material.icons.filled.GpsOff
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -35,15 +38,19 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.pitwise.domain.map.MapRepository
 import com.example.pitwise.ui.screen.welcome.AuthViewModel
 import com.example.pitwise.ui.theme.PitwiseBorder
 import com.example.pitwise.ui.theme.PitwiseGray400
@@ -58,11 +65,26 @@ fun HomeScreen(
     onNavigateToMap: () -> Unit,
     onNavigateToMeasure: () -> Unit,
     onNavigateToCalculate: () -> Unit,
+    onNavigateToProductivity: () -> Unit,
     onLogout: () -> Unit,
-    viewModel: AuthViewModel = hiltViewModel()
+    viewModel: AuthViewModel = hiltViewModel(),
+    mapRepository: MapRepository = hiltViewModel<HomeStatusHelper>().mapRepository
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val role = uiState.session?.role ?: "GUEST"
+
+    // GPS status check
+    val context = LocalContext.current
+    val isGpsEnabled = remember {
+        try {
+            val lm = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+            lm.isProviderEnabled(LocationManager.GPS_PROVIDER)
+        } catch (_: Exception) { false }
+    }
+
+    // Map count from DB
+    val maps by mapRepository.allMaps.collectAsState(initial = emptyList())
+    val mapCount = maps.size
 
     Scaffold(
         topBar = {
@@ -168,6 +190,12 @@ fun HomeScreen(
                     subtitle = "OB, Coal, Hauling, Grade, Cut & Fill",
                     onClick = onNavigateToCalculate
                 )
+                HomeActionButton(
+                    icon = Icons.Default.Speed,
+                    title = "PRODUCTIVITY",
+                    subtitle = "Track daily production & delays",
+                    onClick = onNavigateToProductivity
+                )
             }
 
             Spacer(modifier = Modifier.weight(1f))
@@ -184,24 +212,24 @@ fun HomeScreen(
                 // GPS Status
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Default.GpsOff,
+                        imageVector = if (isGpsEnabled) Icons.Default.GpsFixed else Icons.Default.GpsOff,
                         contentDescription = null,
-                        tint = PitwiseGray400,
+                        tint = if (isGpsEnabled) PitwiseSuccess else PitwiseGray400,
                         modifier = Modifier.size(14.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "GPS OFF",
+                        text = if (isGpsEnabled) "GPS ON" else "GPS OFF",
                         style = MaterialTheme.typography.labelSmall,
-                        color = PitwiseGray400
+                        color = if (isGpsEnabled) PitwiseSuccess else PitwiseGray400
                     )
                 }
 
                 // Map status
                 Text(
-                    text = "No map loaded",
+                    text = if (mapCount > 0) "$mapCount map loaded" else "No map loaded",
                     style = MaterialTheme.typography.labelSmall,
-                    color = PitwiseGray400
+                    color = if (mapCount > 0) PitwisePrimary else PitwiseGray400
                 )
 
                 // Mode

@@ -93,9 +93,14 @@ class GeoPdfParser {
             // Use the first viewport (most GeoPDFs have a single geo viewport)
             val viewport = resolveObject(vpArray.getObject(0))
             if (viewport is COSDictionary) {
+                // Extract viewport BBox — defines the rectangular area on the page
+                // that the geo-registration applies to
+                val bboxArray = resolveObject(viewport.getDictionaryObject(COSName.getPDFName("BBox")))
+                val bbox = parseNumberArray(bboxArray)
+                
                 val measureDict = resolveDictionary(viewport.getDictionaryObject(COSName.getPDFName("Measure")))
                 if (measureDict != null) {
-                    return parseMeasureDictionary(measureDict, pageWidth, pageHeight)
+                    return parseMeasureDictionary(measureDict, pageWidth, pageHeight, bbox)
                 }
             }
         }
@@ -103,7 +108,7 @@ class GeoPdfParser {
         // Strategy 2: Look for /Measure directly on the page (some generators skip /VP)
         val measureDict = resolveDictionary(pageDict.getDictionaryObject(COSName.getPDFName("Measure")))
         if (measureDict != null) {
-            return parseMeasureDictionary(measureDict, pageWidth, pageHeight)
+            return parseMeasureDictionary(measureDict, pageWidth, pageHeight, null)
         }
 
         // Strategy 3: Walk all page objects looking for /Type/Measure/Subtype/GEO
@@ -112,11 +117,16 @@ class GeoPdfParser {
 
     /**
      * Parse a /Measure dictionary with /Subtype/GEO.
+     *
+     * @param bbox Optional viewport BBox [x1, y1, x2, y2] in PDF points.
+     *             When present, normalized LPTS are mapped relative to this BBox
+     *             rather than the full page dimensions.
      */
     private fun parseMeasureDictionary(
         measureDict: COSDictionary,
         pageWidth: Double,
-        pageHeight: Double
+        pageHeight: Double,
+        bbox: List<Double>? = null
     ): GeoPdfMetadata? {
         // Verify subtype is GEO
         val subtype = measureDict.getNameAsString(COSName.SUBTYPE)
@@ -138,6 +148,16 @@ class GeoPdfParser {
         // Parse LPTS (Local Points) — pixel coordinate pairs
         val lptsArray = resolveObject(measureDict.getDictionaryObject(COSName.getPDFName("LPTS")))
         val lpts = parseNumberArray(lptsArray) ?: return null
+
+        // Determine the coordinate space for LPTS denormalization.
+        // If a viewport BBox is provided, LPTS are relative to the BBox area.
+        // BBox format: [x1, y1, x2, y2] where (x1,y1) is lower-left, (x2,y2) is upper-right
+        val bboxX1 = bbox?.getOrNull(0) ?: 0.0
+        val bboxY1 = bbox?.getOrNull(1) ?: 0.0
+        val bboxX2 = bbox?.getOrNull(2) ?: pageWidth
+        val bboxY2 = bbox?.getOrNull(3) ?: pageHeight
+        val bboxWidth = bboxX2 - bboxX1
+        val bboxHeight = bboxY2 - bboxY1
 
         val pixelPoints = mutableListOf<PixelPoint>()
         for (i in lpts.indices step 2) {
@@ -182,7 +202,11 @@ class GeoPdfParser {
             lptsNormalized = lptsNormalized,
             bounds = bounds,
             pageWidth = pageWidth,
-            pageHeight = pageHeight
+            pageHeight = pageHeight,
+            bboxX = bboxX1,
+            bboxY = bboxY1,
+            bboxWidth = bboxWidth,
+            bboxHeight = bboxHeight
         )
     }
 

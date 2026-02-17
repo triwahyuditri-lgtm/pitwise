@@ -2,20 +2,28 @@ package com.example.pitwise.ui.screen.map
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.net.Uri
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.pitwise.data.local.entity.MapAnnotation
 import com.example.pitwise.data.local.entity.MapEntry
+import com.example.pitwise.domain.map.AnnotationExporter
 import com.example.pitwise.domain.map.CoordinateFormat
 import com.example.pitwise.domain.map.CoordinateUtils
 import com.example.pitwise.domain.map.DxfEntity
 import com.example.pitwise.domain.map.DxfFile
 import com.example.pitwise.domain.map.DxfParser
+import com.example.pitwise.domain.map.ExportFormat
 import com.example.pitwise.domain.map.SnapResult
 import com.example.pitwise.domain.map.SnapType
 import com.example.pitwise.domain.map.GpsCalibrationManager
@@ -100,6 +108,7 @@ data class MapUiState(
     val gpsLocalX: Double? = null,
     val gpsLocalY: Double? = null,
     val gpsAccuracy: Float? = null,
+    val gpsBearing: Float? = null,  // Heading in degrees (0=North, clockwise)
     val isGpsTracking: Boolean = false,
     val permissionDenied: Boolean = false,
 
@@ -117,6 +126,7 @@ data class MapUiState(
     val tapLocalX: Double? = null,
     val tapLocalY: Double? = null,
     val tapZ: Double? = null,
+    val tapCoordinateText: String = "", // Formatted UTM/LatLng text for tap position
     val showTapTooltip: Boolean = false,
 
     // Persisted annotations
@@ -134,7 +144,10 @@ data class MapUiState(
 
     // GeoPDF
     val isGeoPdf: Boolean = false,
-    val geoPdfDebugInfo: GeoPdfDebugInfo? = null
+    val geoPdfDebugInfo: GeoPdfDebugInfo? = null,
+
+    // DXF GPS Calibration
+    val isDxfGpsCalibrated: Boolean = false
 )
 
 // ════════════════════════════════════════════════════
@@ -149,6 +162,7 @@ class MapViewModel @Inject constructor(
     private val pdfRenderer: PdfRendererEngine,
     private val gpsCalibrationManager: GpsCalibrationManager,
     private val geoPdfRepository: GeoPdfRepository,
+    private val annotationExporter: AnnotationExporter,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -161,8 +175,42 @@ class MapViewModel @Inject constructor(
     val transformEngine = MapTransformEngine()
     private val modeController = MapModeController()
 
+    /** Exposed for MapRenderer to draw accurate on-canvas measurement labels. */
+    val coordinateConverter: ((Double, Double) -> Pair<Double, Double>?)?
+        get() = modeController.coordinateConverter
+
     private var locationCallback: LocationCallback? = null
     private var coordinateDebounceJob: Job? = null
+    private var tooltipDismissJob: Job? = null
+
+    // ── DXF GPS Offset ──
+    // User-calibrated offset to align GPS UTM coords with DXF local coordinate space.
+    // DXF files in mining often use local grids offset from standard UTM.
+    // Set via calibrateDxfGps() — user navigates crosshair to known location, taps calibrate.
+    private var dxfGpsOffsetX: Double? = null
+    private var dxfGpsOffsetY: Double? = null
+
+    // ── Compass Heading Sensor ──
+    private val sensorManager = appContext.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
+    private var compassBearing: Float? = null  // From device compass (used when not moving)
+    private var gpsBearingFromLocation: Float? = null  // From GPS (used when moving)
+    private val compassListener = object : SensorEventListener {
+        private val rotationMatrix = FloatArray(9)
+        private val orientation = FloatArray(3)
+
+        override fun onSensorChanged(event: SensorEvent) {
+            if (event.sensor.type == Sensor.TYPE_ROTATION_VECTOR) {
+                SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values)
+                SensorManager.getOrientation(rotationMatrix, orientation)
+                // orientation[0] = azimuth in radians (-π to π), convert to degrees (0-360)
+                val azimuthDeg = Math.toDegrees(orientation[0].toDouble()).toFloat()
+                compassBearing = (azimuthDeg + 360f) % 360f
+                updateBearingState()
+            }
+        }
+
+        override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+    }
 
     init {
         if (mapId > 0) {
@@ -170,6 +218,7 @@ class MapViewModel @Inject constructor(
             loadAnnotations(mapId)
         }
         startGpsTracking()
+        startCompassSensor()
     }
 
     override fun onCleared() {
@@ -180,6 +229,10 @@ class MapViewModel @Inject constructor(
                     .removeLocationUpdates(it)
             } catch (_: Exception) {}
         }
+        // Stop compass sensor
+        try {
+            sensorManager?.unregisterListener(compassListener)
+        } catch (_: Exception) {}
     }
 
     // ════════════════════════════════════════════════════
@@ -211,6 +264,9 @@ class MapViewModel @Inject constructor(
                 when (entry.type) {
                     "DXF" -> {
                         transformEngine.flipY = true
+                        dxfGpsOffsetX = null  // Reset GPS offset for new DXF
+                        dxfGpsOffsetY = null
+                        modeController.coordinateConverter = null  // DXF uses real-world units
                         loadDxfFromUri(entry.uri)
                     }
                     "PDF" -> {
@@ -230,8 +286,9 @@ class MapViewModel @Inject constructor(
     private suspend fun loadDxfFromUri(uriString: String) {
         try {
             val uri = Uri.parse(uriString)
-            val content = appContext.contentResolver.openInputStream(uri)
-                ?.bufferedReader()?.readText()
+            val content = appContext.contentResolver.openInputStream(uri)?.use { stream ->
+                stream.bufferedReader().readText()
+            }
             if (content != null) {
                 val dxf = dxfParser.parse(content)
                 _uiState.value = _uiState.value.copy(
@@ -270,6 +327,20 @@ class MapViewModel @Inject constructor(
             geoPdfRepository.reset()
             val geoPdfResult = geoPdfRepository.parseAndInitialize(uri)
             val isGeoPdf = geoPdfResult is GeoPdfValidationResult.Valid
+            if (isGeoPdf) {
+                // Match the DPI used by PdfRendererEngine (default 150)
+                // so gpsToPixel() returns bitmap pixel coordinates
+                geoPdfRepository.setRenderDpi(150)
+
+                // Set coordinate converter for accurate measurement on PDF maps.
+                // Converts bitmap pixel coords → projected CRS (UTM meters)
+                // so distance/area calculations produce results in real-world units.
+                modeController.coordinateConverter = { pixelX, pixelY ->
+                    geoPdfRepository.pixelToProjected(pixelX, pixelY)
+                }
+            } else {
+                modeController.coordinateConverter = null
+            }
             _uiState.value = _uiState.value.copy(isGeoPdf = isGeoPdf)
         } catch (e: Exception) {
             _uiState.value = _uiState.value.copy(
@@ -386,19 +457,7 @@ class MapViewModel @Inject constructor(
                     val (lat, lng) = gps
                     val format = _uiState.value.coordinateFormat
                     val full = CoordinateUtils.format(lat, lng, format)
-                    
-                    val (zone, east, north) = when (format) {
-                        CoordinateFormat.UTM -> {
-                            val parts = full.split(" ")
-                             // CoordinateUtils format: "48 M 123456 E 9876543 N"
-                            if (parts.size >= 6) {
-                                Triple("${parts[0]} ${parts[1]}", "${parts[2]} ${parts[3]}", "${parts[4]} ${parts[5]}")
-                            } else {
-                                Triple("", "", full)
-                            }
-                        }
-                        else -> Triple("", "", full)
-                    }
+                    val (zone, east, north) = parseUtmParts(full, format)
 
                     _uiState.value = _uiState.value.copy(
                         coordinateText = full,
@@ -503,15 +562,30 @@ class MapViewModel @Inject constructor(
                     selectAnnotation(hit)
                 } else {
                     deselectAnnotation()
+                    // Convert pixel coords to geo-coordinates if GeoPDF is loaded
+                    val tapCoordText = if (geoPdfRepository.hasValidGeoPdf) {
+                        val gps = geoPdfRepository.pixelToGps(worldX, worldY)
+                        if (gps != null) {
+                            val (lat, lng) = gps
+                            val format = _uiState.value.coordinateFormat
+                            CoordinateUtils.format(lat, lng, format)
+                        } else {
+                            "X: ${"%.1f".format(worldX)} Y: ${"%.1f".format(worldY)}"
+                        }
+                    } else {
+                        "X: ${"%.1f".format(worldX)} Y: ${"%.1f".format(worldY)}"
+                    }
                     // Show temporary coordinate tooltip (auto-dismiss in 3s)
                     _uiState.value = _uiState.value.copy(
                         tapLocalX = worldX,
                         tapLocalY = worldY,
                         tapZ = z,
+                        tapCoordinateText = tapCoordText,
                         showTapTooltip = true
                     )
-                    // Auto-dismiss after 3 seconds
-                    viewModelScope.launch {
+                    // Auto-dismiss after 3 seconds (cancel previous to avoid race)
+                    tooltipDismissJob?.cancel()
+                    tooltipDismissJob = viewModelScope.launch {
                         kotlinx.coroutines.delay(3000)
                         if (_uiState.value.showTapTooltip) {
                             _uiState.value = _uiState.value.copy(showTapTooltip = false)
@@ -606,6 +680,7 @@ class MapViewModel @Inject constructor(
                     is DxfEntity.Point -> entity.layer
                     is DxfEntity.Line -> entity.layer
                     is DxfEntity.Polyline -> entity.layer
+                    is DxfEntity.Text -> continue
                 }
                 val candidates: List<Triple<Double, Double, Double>> = when (entity) {
                     is DxfEntity.Point -> listOf(Triple(entity.x, entity.y, entity.z))
@@ -614,6 +689,7 @@ class MapViewModel @Inject constructor(
                         Triple(entity.x2, entity.y2, entity.z2)
                     )
                     is DxfEntity.Polyline -> entity.vertices.map { Triple(it.x, it.y, it.z) }
+                    is DxfEntity.Text -> continue
                 }
                 for ((vx, vy, vz) in candidates) {
                     val s = transformEngine.worldToScreen(vx, vy)
@@ -637,6 +713,7 @@ class MapViewModel @Inject constructor(
                     is DxfEntity.Point -> continue
                     is DxfEntity.Line -> entity.layer
                     is DxfEntity.Polyline -> entity.layer
+                    is DxfEntity.Text -> continue
                 }
                 val segments: List<Pair<Pair<Double, Double>, Pair<Double, Double>>> = when (entity) {
                     is DxfEntity.Line -> listOf(
@@ -767,12 +844,20 @@ class MapViewModel @Inject constructor(
             val count = mapRepository.countPointAnnotations(mapId)
             val name = "Placemark ${count + 1}"
             val json = MapSerializationUtils.pointsToJson(listOf(MapPoint(worldX, worldY)))
+
+            // Store GPS coordinates in label field as "lat,lng" for coordinate display
+            val gpsLabel = if (geoPdfRepository.hasValidGeoPdf) {
+                val gps = geoPdfRepository.pixelToGps(worldX, worldY)
+                if (gps != null) "${gps.first},${gps.second}" else ""
+            } else ""
+
             val id = mapRepository.insertAnnotation(
                 MapAnnotation(
                     mapId = mapId,
                     type = "POINT",
                     pointsJson = json,
                     name = name,
+                    label = gpsLabel,
                     elevation = z,
                     layer = "Default"
                 )
@@ -833,10 +918,11 @@ class MapViewModel @Inject constructor(
             val mapPoints = points.map { MapPoint(it.x, it.y) }
             val json = MapSerializationUtils.pointsToJson(mapPoints)
             val distance = modeController.computeDistance()
-            val existing = _uiState.value.annotations.count {
-                it.type == "LINE" && it.name.startsWith("Distance")
-            }
-            val name = "Distance ${existing + 1}"
+            val maxIndex = _uiState.value.annotations
+                .filter { it.type == "LINE" && it.name.startsWith("Distance") }
+                .mapNotNull { it.name.removePrefix("Distance ").trim().toIntOrNull() }
+                .maxOrNull() ?: 0
+            val name = "Distance ${maxIndex + 1}"
             val id = mapRepository.insertAnnotation(
                 MapAnnotation(
                     mapId = mapId,
@@ -861,10 +947,11 @@ class MapViewModel @Inject constructor(
             val json = MapSerializationUtils.pointsToJson(mapPoints)
             val distance = modeController.computePerimeter()
             val area = modeController.computeArea()
-            val existing = _uiState.value.annotations.count {
-                it.type == "POLYGON" && it.name.startsWith("Area")
-            }
-            val name = "Area ${existing + 1}"
+            val maxIndex = _uiState.value.annotations
+                .filter { it.type == "POLYGON" && it.name.startsWith("Area") }
+                .mapNotNull { it.name.removePrefix("Area ").trim().toIntOrNull() }
+                .maxOrNull() ?: 0
+            val name = "Area ${maxIndex + 1}"
             val id = mapRepository.insertAnnotation(
                 MapAnnotation(
                     mapId = mapId,
@@ -945,6 +1032,48 @@ class MapViewModel @Inject constructor(
         }
     }
 
+    fun updateAnnotationStyle(annotationId: Long, style: String) {
+        viewModelScope.launch {
+            val existing = mapRepository.getAnnotationById(annotationId) ?: return@launch
+            val updated = existing.copy(markerStyle = style)
+            mapRepository.updateAnnotation(updated)
+            _uiState.value = _uiState.value.copy(selectedAnnotation = updated)
+        }
+    }
+
+    fun updateAnnotationCoordFormat(annotationId: Long, format: String) {
+        viewModelScope.launch {
+            val existing = mapRepository.getAnnotationById(annotationId) ?: return@launch
+            val updated = existing.copy(coordFormat = format)
+            mapRepository.updateAnnotation(updated)
+            _uiState.value = _uiState.value.copy(selectedAnnotation = updated)
+        }
+    }
+
+    /**
+     * Convert a MapAnnotation's world-space coords to GPS (lat, lng).
+     * Returns null if GeoPDF is not loaded or conversion fails.
+     */
+    fun getAnnotationGpsCoords(annotation: MapAnnotation): Pair<Double, Double>? {
+        // First try the stored GPS label (lat,lng format)
+        if (annotation.label.contains(",")) {
+            val parts = annotation.label.split(",")
+            if (parts.size == 2) {
+                val lat = parts[0].toDoubleOrNull()
+                val lng = parts[1].toDoubleOrNull()
+                if (lat != null && lng != null) return Pair(lat, lng)
+            }
+        }
+        // Fallback: convert from world coords
+        if (geoPdfRepository.hasValidGeoPdf) {
+            val point = MapSerializationUtils.parseJsonToPoints(annotation.pointsJson).firstOrNull()
+            if (point != null) {
+                return geoPdfRepository.pixelToGps(point.x, point.y)
+            }
+        }
+        return null
+    }
+
     fun deleteSelectedAnnotation() {
         val selected = _uiState.value.selectedAnnotation ?: return
         viewModelScope.launch {
@@ -1012,9 +1141,33 @@ class MapViewModel @Inject constructor(
         val lat = _uiState.value.gpsLat
         val lng = _uiState.value.gpsLng
         if (lat != null && lng != null) {
+            val full = CoordinateUtils.format(lat, lng, next)
+            val (zone, east, north) = parseUtmParts(full, next)
             _uiState.value = _uiState.value.copy(
-                coordinateText = CoordinateUtils.format(lat, lng, next)
+                coordinateText = full,
+                coordinateZone = zone,
+                coordinateEasting = east,
+                coordinateNorthing = north
             )
+        } else {
+            // GeoPDF center — refresh via debounced update
+            scheduleCoordinateUpdate()
+        }
+    }
+
+    /** Parse UTM formatted string into zone/easting/northing parts. */
+    private fun parseUtmParts(full: String, format: CoordinateFormat): Triple<String, String, String> {
+        return when (format) {
+            CoordinateFormat.UTM -> {
+                // Format: "51 N 169743 E 83712 N"
+                val parts = full.split(" ")
+                if (parts.size >= 6) {
+                    Triple("${parts[0]} ${parts[1]}", "${parts[2]} ${parts[3]}", "${parts[4]} ${parts[5]}")
+                } else {
+                    Triple("", "", full)
+                }
+            }
+            else -> Triple("", "", full)
         }
     }
 
@@ -1058,8 +1211,15 @@ class MapViewModel @Inject constructor(
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 result.lastLocation?.let { loc ->
+                    // Capture GPS bearing when moving (speed > 1 m/s and hasBearing)
+                    if (loc.hasBearing() && loc.speed > 1f) {
+                        gpsBearingFromLocation = loc.bearing
+                    } else {
+                        gpsBearingFromLocation = null  // Fall back to compass
+                    }
                     viewModelScope.launch {
                         updateGpsPosition(loc.latitude, loc.longitude, loc.accuracy)
+                        updateBearingState()
                     }
                 }
             }
@@ -1069,6 +1229,23 @@ class MapViewModel @Inject constructor(
             fusedClient.requestLocationUpdates(request, locationCallback!!, appContext.mainLooper)
             _uiState.value = _uiState.value.copy(isGpsTracking = true)
         } catch (_: SecurityException) {}
+    }
+
+    private fun startCompassSensor() {
+        val rotationSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+        if (rotationSensor != null) {
+            sensorManager?.registerListener(
+                compassListener,
+                rotationSensor,
+                SensorManager.SENSOR_DELAY_UI
+            )
+        }
+    }
+
+    /** GPS bearing takes priority over compass when device is moving. */
+    private fun updateBearingState() {
+        val bearing = gpsBearingFromLocation ?: compassBearing
+        _uiState.value = _uiState.value.copy(gpsBearing = bearing)
     }
 
     fun toggleTargetMode() {
@@ -1088,26 +1265,10 @@ class MapViewModel @Inject constructor(
 
     private suspend fun updateGpsPosition(lat: Double, lng: Double, accuracy: Float?) {
         val format = _uiState.value.coordinateFormat
-        
-        // Format coordinates
-        val (zone, east, north) = when (format) {
-            CoordinateFormat.UTM -> {
-               // We need a proper utils helper that returns parts. 
-               // optimizing: just parse the formatted string or update CoordinateUtils later.
-               // For now, let's assume CoordinateUtils.format returns a single string and we parse it 
-               // OR we just use the existing CoordinateUtils and split manually if it's standard format.
-               // Let's rely on CoordinateUtils.format for now and improve split in UI or here.
-               // Actually, Avenza style wants Zone, Easting, Northing separate. 
-               // I'll do a quick partial parsing or update CoordinateUtils. 
-               // For safety, I'll do basic splitting here based on known format "Zone X, E:..., N:..."
-               val full = CoordinateUtils.format(lat, lng, format)
-               val parts = full.split(", ")
-               if (parts.size >= 3) Triple(parts[0], parts[1], parts[2]) else Triple("", "", full)
-            }
-            else -> Triple("", "", CoordinateUtils.format(lat, lng, format))
-        }
+        val full = CoordinateUtils.format(lat, lng, format)
+        val (zone, east, north) = parseUtmParts(full, format)
 
-        // Use GeoPDF pipeline if available, otherwise fallback to GpsCalibrationManager
+        // Use GeoPDF pipeline if available
         if (geoPdfRepository.hasValidGeoPdf) {
             val pixel = geoPdfRepository.gpsToPixel(lat, lng)
             val debugInfo = geoPdfRepository.getDebugInfo(lat, lng)
@@ -1118,6 +1279,10 @@ class MapViewModel @Inject constructor(
                 gpsLocalX = pixel?.x,
                 gpsLocalY = pixel?.y,
                 gpsAccuracy = accuracy,
+                coordinateText = full,
+                coordinateZone = zone,
+                coordinateEasting = east,
+                coordinateNorthing = north,
                 geoPdfDebugInfo = debugInfo
             )
             
@@ -1126,6 +1291,32 @@ class MapViewModel @Inject constructor(
                  centerOnMapPoint(pixel.x, pixel.y)
             }
             
+        } else if (_uiState.value.isDxfMap) {
+            // DXF map: GPS lat/lng → UTM → apply user calibration offset (if set)
+            val utm = CoordinateUtils.latLngToUtm(lat, lng)
+
+            // Apply calibration offset if user has calibrated, otherwise raw UTM
+            val localX = utm.easting + (dxfGpsOffsetX ?: 0.0)
+            val localY = utm.northing + (dxfGpsOffsetY ?: 0.0)
+
+            _uiState.value = _uiState.value.copy(
+                gpsLat = lat,
+                gpsLng = lng,
+                gpsLocalX = localX,
+                gpsLocalY = localY,
+                gpsAccuracy = accuracy,
+                coordinateText = full,
+                coordinateZone = zone,
+                coordinateEasting = east,
+                coordinateNorthing = north,
+                geoPdfDebugInfo = null
+            )
+
+            // Auto-center if Target Mode is active
+            if (_uiState.value.isTargetMode) {
+                centerOnMapPoint(localX, localY)
+            }
+
         } else {
             val calibrationData = gpsCalibrationManager.calibrationFlow.first()
             val (localX, localY) = gpsCalibrationManager.transformToLocal(lat, lng, calibrationData)
@@ -1136,6 +1327,10 @@ class MapViewModel @Inject constructor(
                 gpsLocalX = localX,
                 gpsLocalY = localY,
                 gpsAccuracy = accuracy,
+                coordinateText = full,
+                coordinateZone = zone,
+                coordinateEasting = east,
+                coordinateNorthing = north,
                 geoPdfDebugInfo = null
             )
             
@@ -1158,6 +1353,65 @@ class MapViewModel @Inject constructor(
              transformEngine.applyPan(dx, dy)
              syncTransformState()
         }
+    }
+
+    // ════════════════════════════════════════════════════
+    // DXF GPS Calibration
+    // ════════════════════════════════════════════════════
+
+    /**
+     * Calibrate GPS on the DXF map.
+     *
+     * The user navigates the DXF crosshair (screen center) to a point where
+     * they physically are, then calls this function. It computes the offset
+     * between the GPS UTM position and the DXF world position at screen center,
+     * and applies this offset to all subsequent GPS readings.
+     */
+    fun calibrateDxfGps() {
+        val gpsLat = _uiState.value.gpsLat ?: return
+        val gpsLng = _uiState.value.gpsLng ?: return
+        val canvasW = _uiState.value.canvasWidth
+        val canvasH = _uiState.value.canvasHeight
+        if (canvasW <= 0 || canvasH <= 0) return
+
+        // Get the DXF world position at screen center (crosshair)
+        val worldPos = transformEngine.screenToWorld(canvasW / 2f, canvasH / 2f)
+        val dxfX = worldPos.first
+        val dxfY = worldPos.second
+
+        // Get current GPS UTM position
+        val utm = CoordinateUtils.latLngToUtm(gpsLat, gpsLng)
+
+        // Compute offset: difference between DXF crosshair and GPS UTM
+        dxfGpsOffsetX = dxfX - utm.easting
+        dxfGpsOffsetY = dxfY - utm.northing
+
+        android.util.Log.i("MapViewModel",
+            "DXF GPS calibrated: offset=(%.1f, %.1f) DXF=(%.1f, %.1f) UTM=(%.1f, %.1f)".format(
+                dxfGpsOffsetX, dxfGpsOffsetY, dxfX, dxfY, utm.easting, utm.northing
+            ))
+
+        // Update state to show calibrated
+        _uiState.value = _uiState.value.copy(isDxfGpsCalibrated = true)
+
+        // Recompute GPS position with new offset
+        val localX = utm.easting + (dxfGpsOffsetX ?: 0.0)
+        val localY = utm.northing + (dxfGpsOffsetY ?: 0.0)
+
+        _uiState.value = _uiState.value.copy(
+            gpsLocalX = localX,
+            gpsLocalY = localY
+        )
+    }
+
+    /**
+     * Reset DXF GPS calibration, reverting to raw UTM coordinates.
+     */
+    fun resetDxfGpsCalibration() {
+        dxfGpsOffsetX = null
+        dxfGpsOffsetY = null
+        _uiState.value = _uiState.value.copy(isDxfGpsCalibrated = false)
+        android.util.Log.i("MapViewModel", "DXF GPS calibration reset")
     }
 
     // ════════════════════════════════════════════════════
@@ -1196,10 +1450,16 @@ class MapViewModel @Inject constructor(
                         if (d < minDist) { minDist = d; bestZ = v.z }
                     }
                 }
+                is DxfEntity.Text -> {
+                    val d = sqrt((entity.x - x) * (entity.x - x) + (entity.y - y) * (entity.y - y))
+                    if (d < minDist) { minDist = d; bestZ = entity.z }
+                }
             }
         }
 
-        return if (minDist < 50.0) bestZ else null
+        // Scale-aware threshold: 30 screen pixels in world units
+        val threshold = 30.0 / transformEngine.scale
+        return if (minDist < threshold) bestZ else null
     }
 
     /**
@@ -1208,5 +1468,78 @@ class MapViewModel @Inject constructor(
     fun getSendToCalculateData(): Pair<Double, Double> {
         val measurement = modeController.getLiveMeasurement()
         return Pair(measurement.area, measurement.distance)
+    }
+
+    // ════════════════════════════════════════════════════
+    // Annotation Export
+    // ════════════════════════════════════════════════════
+
+    /**
+     * Generate an export file without sharing. Returns the file or null.
+     */
+    fun generateExportFile(annotation: MapAnnotation, format: ExportFormat): java.io.File? {
+        val coordToLatLng: ((Double, Double) -> Pair<Double, Double>?)? =
+            if (geoPdfRepository.hasValidGeoPdf) {
+                { x, y -> geoPdfRepository.pixelToGps(x, y) }
+            } else null
+
+        val coordToProjected: ((Double, Double) -> Pair<Double, Double>?)? =
+            if (geoPdfRepository.hasValidGeoPdf) {
+                { x, y -> geoPdfRepository.pixelToProjected(x, y) }
+            } else null
+
+        return annotationExporter.export(
+            context = appContext,
+            annotation = annotation,
+            format = format,
+            coordToLatLng = coordToLatLng,
+            coordToProjected = coordToProjected
+        )
+    }
+
+    /**
+     * Export an annotation to KML, KMZ, or DXF and launch a share intent.
+     */
+    fun exportAnnotation(annotation: MapAnnotation, format: ExportFormat) {
+        viewModelScope.launch {
+            val file = generateExportFile(annotation, format) ?: return@launch
+
+            if (file.exists()) {
+                val uri = FileProvider.getUriForFile(
+                    appContext,
+                    "${appContext.packageName}.fileprovider",
+                    file
+                )
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = format.mimeType
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    putExtra(Intent.EXTRA_SUBJECT, "PITWISE Export: ${annotation.name}")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                appContext.startActivity(
+                    Intent.createChooser(shareIntent, "Export ${format.label}")
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            }
+        }
+    }
+
+    /**
+     * Save a generated export file to a user-chosen location via SAF Uri.
+     */
+    fun saveExportToUri(annotation: MapAnnotation, format: ExportFormat, targetUri: Uri) {
+        viewModelScope.launch {
+            try {
+                val file = generateExportFile(annotation, format) ?: return@launch
+                appContext.contentResolver.openOutputStream(targetUri)?.use { outputStream ->
+                    file.inputStream().use { inputStream ->
+                        inputStream.copyTo(outputStream)
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 }

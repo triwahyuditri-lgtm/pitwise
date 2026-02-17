@@ -6,12 +6,15 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.navigation.compose.rememberNavController
 import com.example.pitwise.data.local.OnboardingPreferences
+import com.example.pitwise.data.sync.EquipmentSyncManager
+import com.example.pitwise.data.sync.NetworkMonitor
 import com.example.pitwise.domain.sync.GlobalUnitSyncManager
 import com.example.pitwise.ui.navigation.PitwiseNavGraph
 import com.example.pitwise.ui.theme.PitwiseTheme
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -20,6 +23,12 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var syncManager: GlobalUnitSyncManager
+
+    @Inject
+    lateinit var equipmentSyncManager: EquipmentSyncManager
+
+    @Inject
+    lateinit var networkMonitor: NetworkMonitor
 
     @Inject
     lateinit var onboardingPreferences: OnboardingPreferences
@@ -31,6 +40,21 @@ class MainActivity : ComponentActivity() {
         // Non-blocking background sync on app launch
         CoroutineScope(Dispatchers.IO).launch {
             syncManager.syncIfNeeded()
+        }
+
+        // Equipment data sync (offline-first)
+        CoroutineScope(Dispatchers.IO).launch {
+            // Initial sync: download from Supabase if no local data
+            if (equipmentSyncManager.isSyncNeeded()) {
+                equipmentSyncManager.initialSync()
+            }
+
+            // Auto-sync: trigger delta sync when network is restored
+            networkMonitor.isOnline.collectLatest { isOnline ->
+                if (isOnline) {
+                    equipmentSyncManager.deltaSync()
+                }
+            }
         }
 
         setContent {

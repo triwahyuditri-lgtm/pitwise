@@ -87,6 +87,8 @@ import com.example.pitwise.domain.map.MapMode
 import com.example.pitwise.domain.map.MeasureSubMode
 import com.example.pitwise.domain.map.PlotSubMode
 import com.example.pitwise.data.local.entity.MapAnnotation
+import com.example.pitwise.domain.map.CoordinateFormat
+import com.example.pitwise.domain.map.CoordinateUtils
 import com.example.pitwise.domain.map.MapSerializationUtils
 import com.example.pitwise.domain.map.SnapType
 import com.example.pitwise.ui.theme.PitwiseBorder
@@ -180,9 +182,11 @@ fun MapScreen(
                     Pair(uiState.gpsLocalX!!, uiState.gpsLocalY!!)
                 } else null,
                 gpsAccuracy = uiState.gpsAccuracy,
+                gpsBearing = uiState.gpsBearing,
                 selectedAnnotationId = uiState.selectedAnnotationId,
                 idPointSnapped = uiState.idPointSnapped,
-                idPointSnapType = uiState.idPointSnapType
+                idPointSnapType = uiState.idPointSnapType,
+                coordinateConverter = viewModel.coordinateConverter
             )
         }
         
@@ -331,6 +335,23 @@ fun MapScreen(
                 .padding(end = 16.dp, bottom = 200.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // DXF GPS Calibrate Button (only for DXF maps with GPS active)
+            if (uiState.isDxfMap && uiState.gpsLat != null) {
+                FloatingActionButton(
+                    onClick = { viewModel.calibrateDxfGps() },
+                    containerColor = if (uiState.isDxfGpsCalibrated) Color(0xFF2E7D32) else Color(0xFFFF6F00),
+                    contentColor = Color.White,
+                    shape = CircleShape,
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Icon(
+                        if (uiState.isDxfGpsCalibrated) Icons.Default.Check else Icons.Default.Place,
+                        "Calibrate GPS",
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+
             // Target Mode Toggle
             FloatingActionButton(
                 onClick = { viewModel.toggleTargetMode() },
@@ -431,11 +452,33 @@ fun MapScreen(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 16.dp)
+                            modifier = Modifier.padding(horizontal = 12.dp)
                         ) {
                             Icon(Icons.Default.Check, "Save", modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text("Save", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
+                    // Send to Calculate button
+                    FloatingActionButton(
+                        onClick = {
+                            val isArea = uiState.measureSubMode == MeasureSubMode.AREA
+                            val type = if (isArea) "area" else "distance"
+                            val value = if (isArea) uiState.liveMeasurement.area else uiState.liveMeasurement.distance
+                            onSendToCalculator(type, value)
+                        },
+                        containerColor = Color(0xFFFFEB3B),
+                        contentColor = Color(0xFF1A1D21),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.height(40.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 12.dp)
+                        ) {
+                            Icon(Icons.Default.Calculate, "Calculate", modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Hitung", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge)
                         }
                     }
                     // Clear button
@@ -448,10 +491,10 @@ fun MapScreen(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 16.dp)
+                            modifier = Modifier.padding(horizontal = 12.dp)
                         ) {
                             Icon(Icons.Default.Close, "Clear", modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text("Clear", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge)
                         }
                     }
@@ -735,7 +778,7 @@ fun MapScreen(
                             .padding(8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("X: ${"%.1f".format(uiState.tapLocalX)} Y: ${"%.1f".format(uiState.tapLocalY)}", color = Color.White)
+                        Text(uiState.tapCoordinateText.ifEmpty { "X: ${"%.1f".format(uiState.tapLocalX)} Y: ${"%.1f".format(uiState.tapLocalY)}" }, color = Color.White)
                         Spacer(modifier = Modifier.width(8.dp))
                         IconButton(onClick = { viewModel.dismissTapTooltip() }, modifier = Modifier.size(20.dp)) {
                             Icon(Icons.Default.Close, "Close", tint = Color.Gray)
@@ -748,12 +791,19 @@ fun MapScreen(
         if (uiState.showDetailSheet && uiState.selectedAnnotation != null) {
             AnnotationDetailSheet(
                 annotation = uiState.selectedAnnotation!!,
+                viewModel = viewModel,
                 onDismiss = { viewModel.dismissDetailSheet() },
                 onNameChanged = { name ->
                     viewModel.updateAnnotationDetails(uiState.selectedAnnotation!!.id, name = name)
                 },
                 onDescriptionChanged = { desc ->
                     viewModel.updateAnnotationDetails(uiState.selectedAnnotation!!.id, description = desc)
+                },
+                onStyleChanged = { style ->
+                    viewModel.updateAnnotationStyle(uiState.selectedAnnotation!!.id, style)
+                },
+                onCoordFormatChanged = { format ->
+                    viewModel.updateAnnotationCoordFormat(uiState.selectedAnnotation!!.id, format)
                 },
                 onDelete = { viewModel.deleteSelectedAnnotation() },
                 modifier = Modifier
@@ -1063,9 +1113,12 @@ private fun PlotSubModeButton(
 @Composable
 private fun AnnotationDetailSheet(
     annotation: MapAnnotation,
+    viewModel: MapViewModel,
     onDismiss: () -> Unit,
     onNameChanged: (String) -> Unit,
     onDescriptionChanged: (String) -> Unit,
+    onStyleChanged: (String) -> Unit,
+    onCoordFormatChanged: (String) -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -1073,11 +1126,75 @@ private fun AnnotationDetailSheet(
     var nameText by remember(annotation.id) { mutableStateOf(annotation.name) }
     var editingDesc by remember(annotation.id) { mutableStateOf(false) }
     var descText by remember(annotation.id) { mutableStateOf(annotation.description) }
+    var showStylePicker by remember { mutableStateOf(false) }
+    var showCoordFormatPicker by remember { mutableStateOf(false) }
+    var showExportPicker by remember { mutableStateOf(false) }
+    var selectedExportFormat by remember { mutableStateOf<com.example.pitwise.domain.map.ExportFormat?>(null) }
+    var showExportActions by remember { mutableStateOf(false) }
 
-    // Get coordinate text from first point
-    val firstPoint = remember(annotation.pointsJson) {
-        MapSerializationUtils.parseJsonToPoints(annotation.pointsJson).firstOrNull()
+    // SAF launcher for Save to Device
+    val safLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.CreateDocument(
+            selectedExportFormat?.mimeType ?: "*/*"
+        )
+    ) { uri ->
+        if (uri != null && selectedExportFormat != null) {
+            viewModel.saveExportToUri(annotation, selectedExportFormat!!, uri)
+        }
+        selectedExportFormat = null
     }
+
+    // Get GPS coordinates from ViewModel
+    val gpsCoords = remember(annotation.id, annotation.pointsJson, annotation.label) {
+        viewModel.getAnnotationGpsCoords(annotation)
+    }
+
+    // Format coordinates based on annotation's coord format
+    val coordText = remember(gpsCoords, annotation.coordFormat) {
+        if (gpsCoords != null) {
+            val (lat, lng) = gpsCoords
+            val format = when (annotation.coordFormat) {
+                "LAT_LNG" -> CoordinateFormat.LAT_LNG
+                "DMS" -> CoordinateFormat.DMS
+                else -> CoordinateFormat.UTM
+            }
+            CoordinateUtils.format(lat, lng, format)
+        } else {
+            val point = MapSerializationUtils.parseJsonToPoints(annotation.pointsJson).firstOrNull()
+            if (point != null) "X: ${"%.2f".format(point.x)}, Y: ${"%.2f".format(point.y)}"
+            else "—"
+        }
+    }
+
+    // Pin color mapping
+    val pinColors = listOf(
+        "pin_red" to Color(0xFFE53935),
+        "pin_blue" to Color(0xFF1E88E5),
+        "pin_green" to Color(0xFF43A047),
+        "pin_orange" to Color(0xFFFB8C00),
+        "pin_purple" to Color(0xFF8E24AA),
+        "pin_yellow" to Color(0xFFFDD835),
+        "pin_teal" to Color(0xFF00897B),
+        "pin_pink" to Color(0xFFD81B60),
+        "pin_indigo" to Color(0xFF3949AB),
+        "pin_grey" to Color(0xFF757575)
+    )
+
+    val pinDisplayNames = mapOf(
+        "pin_red" to "Pin Merah",
+        "pin_blue" to "Pin Biru",
+        "pin_green" to "Pin Hijau",
+        "pin_orange" to "Pin Jingga",
+        "pin_purple" to "Pin Ungu",
+        "pin_yellow" to "Pin Kuning",
+        "pin_teal" to "Pin Teal",
+        "pin_pink" to "Pin Merah Muda",
+        "pin_indigo" to "Pin Indigo",
+        "pin_grey" to "Pin Abu-abu"
+    )
+
+    val currentPinColor = pinColors.firstOrNull { it.first == annotation.markerStyle }?.second
+        ?: Color(0xFFE53935)
 
     Column(
         modifier = modifier
@@ -1107,7 +1224,10 @@ private fun AnnotationDetailSheet(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
                 // Type badge
                 val typeColor = when (annotation.type) {
                     "POINT" -> Color(0xFF2196F3)
@@ -1165,15 +1285,79 @@ private fun AnnotationDetailSheet(
         HorizontalDivider(color = PitwiseBorder)
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Coordinates
-        if (firstPoint != null) {
-            DetailRow(label = "X", value = "%.2f".format(firstPoint.x))
-            DetailRow(label = "Y", value = "%.2f".format(firstPoint.y))
+        // ── Coordinates Section ──
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "Coordinates",
+                style = MaterialTheme.typography.labelMedium,
+                color = PitwiseGray400,
+                fontWeight = FontWeight.Bold
+            )
+            // Coord format toggle
+            Box {
+                val formatLabel = when (annotation.coordFormat) {
+                    "LAT_LNG" -> "Lat/Lng"
+                    "DMS" -> "DMS"
+                    else -> "UTM"
+                }
+                Row(
+                    modifier = Modifier
+                        .clickable { showCoordFormatPicker = !showCoordFormatPicker }
+                        .background(PitwiseBorder, RoundedCornerShape(6.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        formatLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = PitwisePrimary,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Icon(
+                        Icons.Default.ArrowDropDown,
+                        contentDescription = null,
+                        tint = PitwisePrimary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+                androidx.compose.material3.DropdownMenu(
+                    expanded = showCoordFormatPicker,
+                    onDismissRequest = { showCoordFormatPicker = false }
+                ) {
+                    listOf("UTM" to "UTM", "LAT_LNG" to "Lat/Lng", "DMS" to "DMS").forEach { (key, label) ->
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text(label) },
+                            onClick = {
+                                onCoordFormatChanged(key)
+                                showCoordFormatPicker = false
+                            },
+                            trailingIcon = {
+                                if (annotation.coordFormat == key) {
+                                    Icon(Icons.Default.Check, null, tint = PitwisePrimary, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        )
+                    }
+                }
+            }
         }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = coordText,
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color.White,
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
 
         // Elevation
         if (annotation.elevation != null) {
-            DetailRow(label = "Elevation", value = "%.1f m".format(annotation.elevation))
+            DetailRow(label = "Elevation", value = "%.2f m".format(annotation.elevation))
         }
 
         // Layer
@@ -1186,14 +1370,17 @@ private fun AnnotationDetailSheet(
 
         // Area (for POLYGON)
         if (annotation.type == "POLYGON" && annotation.area > 0) {
-            DetailRow(label = "Area", value = "%.2f m\u00B2".format(annotation.area))
+            DetailRow(label = "Area", value = "%.2f m²".format(annotation.area))
             if (annotation.distance > 0) {
                 DetailRow(label = "Perimeter", value = "%.2f m".format(annotation.distance))
             }
         }
 
-        // Description
         Spacer(modifier = Modifier.height(8.dp))
+        HorizontalDivider(color = PitwiseBorder)
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // ── Description ──
         if (editingDesc) {
             androidx.compose.material3.OutlinedTextField(
                 value = descText,
@@ -1224,7 +1411,94 @@ private fun AnnotationDetailSheet(
             )
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(8.dp))
+        HorizontalDivider(color = PitwiseBorder)
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // ── Marker Style Section ──
+        if (annotation.type == "POINT") {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Style",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = PitwiseGray400,
+                    fontWeight = FontWeight.Bold
+                )
+                Row(
+                    modifier = Modifier
+                        .clickable { showStylePicker = !showStylePicker }
+                        .background(PitwiseBorder, RoundedCornerShape(6.dp))
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(16.dp)
+                            .background(currentPinColor, CircleShape)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        pinDisplayNames[annotation.markerStyle] ?: "Pin Merah",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White
+                    )
+                    Icon(
+                        Icons.Default.ArrowDropDown,
+                        contentDescription = null,
+                        tint = PitwiseGray400,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Style picker grid
+            if (showStylePicker) {
+                val rows = pinColors.chunked(5)
+                rows.forEach { row ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        row.forEach { (styleKey, color) ->
+                            val isSelected = annotation.markerStyle == styleKey
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier
+                                    .clickable {
+                                        onStyleChanged(styleKey)
+                                        showStylePicker = false
+                                    }
+                                    .padding(6.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .background(color, CircleShape)
+                                        .then(
+                                            if (isSelected) Modifier.border(2.dp, PitwisePrimary, CircleShape)
+                                            else Modifier
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (isSelected) {
+                                        Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            HorizontalDivider(color = PitwiseBorder)
+            Spacer(modifier = Modifier.height(8.dp))
+        }
 
         // Created date
         val dateStr = remember(annotation.createdAt) {
@@ -1239,23 +1513,186 @@ private fun AnnotationDetailSheet(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Delete button
+        // Action buttons: Export + Delete
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            androidx.compose.material3.TextButton(
-                onClick = onDelete
-            ) {
-                Icon(
-                    Icons.Default.Close,
-                    "Delete",
-                    tint = Color(0xFFCF4444),
-                    modifier = Modifier.size(16.dp)
-                )
+            // Export button
+            androidx.compose.material3.TextButton(onClick = { showExportPicker = true }) {
+                Text("📤", fontSize = 14.sp)
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Export", color = PitwisePrimary)
+            }
+
+            // Delete button
+            androidx.compose.material3.TextButton(onClick = onDelete) {
+                Icon(Icons.Default.Close, "Delete", tint = Color(0xFFCF4444), modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("Delete", color = Color(0xFFCF4444))
             }
+        }
+
+        // Export format picker dialog
+        if (showExportPicker) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showExportPicker = false },
+                title = {
+                    Text(
+                        "Export Format",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                text = {
+                    Column {
+                        Text(
+                            "Pilih format export:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = PitwiseGray400
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        com.example.pitwise.domain.map.ExportFormat.entries.forEach { format ->
+                            val desc = when (format) {
+                                com.example.pitwise.domain.map.ExportFormat.KML -> "Google Earth (XML)"
+                                com.example.pitwise.domain.map.ExportFormat.KMZ -> "Google Earth (ZIP)"
+                                com.example.pitwise.domain.map.ExportFormat.DXF -> "AutoCAD Drawing"
+                            }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        showExportPicker = false
+                                        selectedExportFormat = format
+                                        showExportActions = true
+                                    }
+                                    .padding(vertical = 10.dp, horizontal = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        format.label,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color.White
+                                    )
+                                    Text(
+                                        desc,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = PitwiseGray400
+                                    )
+                                }
+                                Text(
+                                    ".${format.extension}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = PitwisePrimary,
+                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                                )
+                            }
+                            if (format != com.example.pitwise.domain.map.ExportFormat.entries.last()) {
+                                HorizontalDivider(color = PitwiseBorder)
+                            }
+                        }
+                    }
+                },
+                confirmButton = {},
+                dismissButton = {
+                    androidx.compose.material3.TextButton(onClick = { showExportPicker = false }) {
+                        Text("Batal")
+                    }
+                }
+            )
+        }
+
+        // Export action dialog (Step 2: Save or Share)
+        if (showExportActions && selectedExportFormat != null) {
+            val fmt = selectedExportFormat!!
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = {
+                    showExportActions = false
+                    selectedExportFormat = null
+                },
+                title = {
+                    Text(
+                        "Export ${fmt.label}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                text = {
+                    Column {
+                        // Save to Device
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    showExportActions = false
+                                    val fileName = "${annotation.name.ifEmpty { annotation.type }}_${annotation.id}.${fmt.extension}"
+                                    safLauncher.launch(fileName)
+                                }
+                                .padding(vertical = 12.dp, horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text("\uD83D\uDCBE", fontSize = 24.sp)
+                            Column {
+                                Text(
+                                    "Simpan ke Perangkat",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color.White
+                                )
+                                Text(
+                                    "Pilih lokasi penyimpanan",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = PitwiseGray400
+                                )
+                            }
+                        }
+
+                        HorizontalDivider(color = PitwiseBorder)
+
+                        // Share
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    showExportActions = false
+                                    viewModel.exportAnnotation(annotation, fmt)
+                                    selectedExportFormat = null
+                                }
+                                .padding(vertical = 12.dp, horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text("\uD83D\uDCE4", fontSize = 24.sp)
+                            Column {
+                                Text(
+                                    "Bagikan",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color.White
+                                )
+                                Text(
+                                    "Kirim via Drive, Email, dll.",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = PitwiseGray400
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {},
+                dismissButton = {
+                    androidx.compose.material3.TextButton(onClick = {
+                        showExportActions = false
+                        selectedExportFormat = null
+                    }) {
+                        Text("Batal")
+                    }
+                }
+            )
         }
     }
 }
@@ -1265,12 +1702,12 @@ private fun DetailRow(label: String, value: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 2.dp),
+            .padding(vertical = 3.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(
             text = label,
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.bodySmall,
             color = PitwiseGray400
         )
         Text(
@@ -1281,3 +1718,5 @@ private fun DetailRow(label: String, value: String) {
         )
     }
 }
+
+

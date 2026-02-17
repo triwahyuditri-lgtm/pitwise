@@ -25,14 +25,14 @@ class ProductivityCalculator @Inject constructor() {
         const val YELLOW_THRESHOLD = -10.0
     }
 
-    fun calculate(input: ProductivityInput): ProductivityResult {
-        require(input.bucketOrVesselM3 > 0) { "Bucket/vessel capacity must be positive" }
-        require(input.cycleTimeActualSec > 0) { "Cycle time must be positive" }
-        require(input.effectiveWorkingHours > 0) { "Effective working hours must be positive" }
-        require(input.targetProduction > 0) { "Target production must be positive" }
-        require(input.fillFactor > 0 && input.fillFactor <= 1.0) {
-            "Fill factor must be between 0 (exclusive) and 1.0 (inclusive)"
-        }
+    fun calculate(input: ProductivityInput): ProductivityResult? {
+        // Validate inputs — return null instead of crashing
+        if (input.bucketOrVesselM3 <= 0 ||
+            input.cycleTimeActualSec <= 0 ||
+            input.effectiveWorkingHours <= 0 ||
+            input.targetProduction <= 0 ||
+            input.fillFactor <= 0 || input.fillFactor > 1.0
+        ) return null
 
         val productivityPerHour = (input.bucketOrVesselM3 * input.fillFactor * 3600.0) / input.cycleTimeActualSec
         val totalProduction = productivityPerHour * input.effectiveWorkingHours

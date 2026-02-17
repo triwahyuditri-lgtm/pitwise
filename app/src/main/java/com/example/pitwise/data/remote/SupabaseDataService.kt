@@ -19,17 +19,17 @@ class SupabaseDataService @Inject constructor(
     suspend fun getMaterials(): Result<List<MaterialDto>> = fetch("material_properties")
 
     suspend fun getLoaders(className: String? = null): Result<List<LoaderDto>> {
-        val query = if (className != null) "?class=eq.$className" else ""
+        val query = if (className != null) "?select=*&class=eq.$className" else ""
         return fetch("loaders$query")
     }
 
     suspend fun getHaulers(className: String? = null): Result<List<HaulerDto>> {
-        val query = if (className != null) "?class=eq.$className" else ""
+        val query = if (className != null) "?select=*&class=eq.$className" else ""
         return fetch("haulers$query")
     }
 
     suspend fun getDozers(className: String? = null): Result<List<DozerDto>> {
-        val query = if (className != null) "?class=eq.$className" else ""
+        val query = if (className != null) "?select=*&class=eq.$className" else ""
         return fetch("dozers$query")
     }
 

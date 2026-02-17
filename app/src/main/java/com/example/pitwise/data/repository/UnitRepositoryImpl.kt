@@ -105,10 +105,11 @@ class UnitRepositoryImpl @Inject constructor(
                     match?.let {
                         UnitSpec(
                             modelId = 0,
-                            bucketCapacityM3 = it.bucketCapBcm, // Use BCM as standard capacity? Or LCM?
+                            bucketCapacityM3 = it.bucketCapBcm,
+                            bucketCapacityLcm = it.bucketCapLcm,
                             fillFactorDefault = it.fillFactor,
                             cycleTimeRefSec = it.cycleTimeSec,
-                            enginePowerHp = 0.0, // Not in loader table
+                            enginePowerHp = 0.0,
                             createdBy = "SUPABASE"
                         )
                     }
@@ -117,12 +118,23 @@ class UnitRepositoryImpl @Inject constructor(
                     val list = supabaseDataService.getHaulers(className).getOrNull()
                     val match = list?.find { it.material.equals(material, ignoreCase = true) }
                     match?.let {
+                        // Use cycle_time_sec from table; fallback: compute from component times
+                        val cycleTime = if (it.cycleTimeSec > 0) {
+                            it.cycleTimeSec
+                        } else {
+                            it.travelSec + it.spottingSec + it.queueingTimeSec + it.dumpingSec + it.returnKmh
+                        }
                         UnitSpec(
                             modelId = 0,
-                            vesselCapacityM3 = it.vesselBcmOrTon,
-                            speedLoadedKmh = it.travelKmh,
-                            speedEmptyKmh = it.returnKmh,
-                            cycleTimeRefSec = it.spottingSec + it.queueingTimeSec + it.dumpingSec, // Total cycle
+                            vesselCapacityM3 = it.vesselLcm, // Vessel LCM
+                            vesselCapacityTon = it.vesselBcmOrTon, // Vessel BCM or Ton
+                            specificGravity = it.specificGravity,
+                            cycleTimeRefSec = cycleTime,
+                            spottingTimeSec = it.spottingSec,
+                            queueingTimeSec = it.queueingTimeSec,
+                            dumpingTimeSec = it.dumpingSec,
+                            returnSpeedKmh = it.returnKmh,
+                            productivity = it.productivity,
                             createdBy = "SUPABASE"
                         )
                     }

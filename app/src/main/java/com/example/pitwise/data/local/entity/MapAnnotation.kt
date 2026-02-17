@@ -60,6 +60,14 @@ data class MapAnnotation(
     /** Layer name for organization */
     val layer: String = "Default",
 
+    /** Marker style for point annotations: "pin_red", "pin_blue", etc. */
+    @ColumnInfo(name = "marker_style")
+    val markerStyle: String = "pin_red",
+
+    /** Coordinate display format preference: "UTM", "LAT_LNG", "DMS" */
+    @ColumnInfo(name = "coord_format")
+    val coordFormat: String = "UTM",
+
     /** Computed distance in meters (for LINE) */
     val distance: Double = 0.0,
 

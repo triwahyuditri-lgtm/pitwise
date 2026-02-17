@@ -270,4 +270,87 @@ class MapModeControllerTest {
         controller.addPoint(10.0, 10.0, null)
         assertFalse(controller.isPolygonClosed(thresholdWorld = 1.0))
     }
+
+    // ── Coordinate Converter Tests ──
+
+    @Test
+    fun `computeDistance with coordinate converter applies conversion`() {
+        // Converter that scales coordinates by 2x
+        controller.coordinateConverter = { x, y -> Pair(x * 2.0, y * 2.0) }
+        controller.setMode(MapMode.MEASURE)
+        controller.addPoint(0.0, 0.0, null)
+        controller.addPoint(3.0, 4.0, null) // raw distance = 5, converted = 10
+        assertEquals(10.0, controller.computeDistance(), 0.01)
+    }
+
+    @Test
+    fun `computeArea with coordinate converter applies conversion`() {
+        // Converter that scales coordinates by 3x
+        controller.coordinateConverter = { x, y -> Pair(x * 3.0, y * 3.0) }
+        controller.setMode(MapMode.PLOT)
+        controller.addPoint(0.0, 0.0, null)
+        controller.addPoint(10.0, 0.0, null)
+        controller.addPoint(10.0, 10.0, null)
+        controller.addPoint(0.0, 10.0, null)
+        // Raw area = 100, converted = 100 * 9 = 900
+        assertEquals(900.0, controller.computeArea(), 0.01)
+    }
+
+    @Test
+    fun `computePerimeter with coordinate converter applies conversion`() {
+        // Converter that offsets coordinates (simulating UTM transform)
+        controller.coordinateConverter = { x, y -> Pair(x + 376000.0, y + 30000.0) }
+        controller.setMode(MapMode.PLOT)
+        controller.addPoint(0.0, 0.0, null)
+        controller.addPoint(10.0, 0.0, null)
+        controller.addPoint(10.0, 10.0, null)
+        controller.addPoint(0.0, 10.0, null)
+        // Offset doesn't change distances, perimeter should still be 40
+        assertEquals(40.0, controller.computePerimeter(), 0.01)
+    }
+
+    @Test
+    fun `computeDistance without converter uses raw coords`() {
+        // No converter set — backward compatibility
+        controller.coordinateConverter = null
+        controller.setMode(MapMode.MEASURE)
+        controller.addPoint(0.0, 0.0, null)
+        controller.addPoint(3.0, 4.0, null)
+        assertEquals(5.0, controller.computeDistance(), 0.01)
+    }
+
+    @Test
+    fun `converter returning null skips point`() {
+        // Converter that rejects odd-indexed points
+        var callCount = 0
+        controller.coordinateConverter = { x, y ->
+            callCount++
+            if (callCount % 2 == 0) null else Pair(x, y)
+        }
+        controller.setMode(MapMode.MEASURE)
+        controller.addPoint(0.0, 0.0, null) // call 1 → accepted
+        controller.addPoint(3.0, 4.0, null) // call 2 → null, skipped
+        controller.addPoint(6.0, 0.0, null) // call 3 → accepted
+        // Only 2 points: (0,0) and (6,0) → distance = 6
+        assertEquals(6.0, controller.computeDistance(), 0.01)
+    }
+
+    @Test
+    fun `getLiveMeasurement with converter returns converted measurements`() {
+        // Converter that scales by 0.5x (simulating pixel→meter scaling)
+        controller.coordinateConverter = { x, y -> Pair(x * 0.5, y * 0.5) }
+        controller.setMode(MapMode.MEASURE)
+        controller.setMeasureSubMode(MeasureSubMode.AREA)
+        controller.addPoint(0.0, 0.0, null)
+        controller.addPoint(20.0, 0.0, null)
+        controller.addPoint(20.0, 20.0, null)
+        controller.addPoint(0.0, 20.0, null)
+
+        val m = controller.getLiveMeasurement()
+        // Raw area = 400, converted area = 400 * 0.25 = 100
+        assertEquals(100.0, m.area, 0.01)
+        // Raw perimeter = 80, converted perimeter = 80 * 0.5 = 40
+        assertEquals(40.0, m.perimeter, 0.01)
+        assertEquals(4, m.pointCount)
+    }
 }

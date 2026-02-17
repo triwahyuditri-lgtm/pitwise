@@ -43,29 +43,34 @@ class PdfRendererEngine @Inject constructor(
      */
     suspend fun renderFirstPage(uri: Uri, dpi: Int = 150): PdfMapData? = withContext(Dispatchers.IO) {
         var renderer: PdfRenderer? = null
+        var fileDescriptor: android.os.ParcelFileDescriptor? = null
+        val tempFile = File.createTempFile("pdf_render_", ".pdf", context.cacheDir)
         try {
             // Copy URI content to a temp file (PdfRenderer needs a seekable file descriptor)
-            val tempFile = File(context.cacheDir, "temp_pdf_render.pdf")
             context.contentResolver.openInputStream(uri)?.use { inputStream ->
                 FileOutputStream(tempFile).use { outputStream ->
                     inputStream.copyTo(outputStream, bufferSize = 8192)
                 }
-            } ?: return@withContext null
+            } ?: run {
+                tempFile.delete()
+                return@withContext null
+            }
 
-            val fileDescriptor = android.os.ParcelFileDescriptor.open(
+            fileDescriptor = android.os.ParcelFileDescriptor.open(
                 tempFile,
                 android.os.ParcelFileDescriptor.MODE_READ_ONLY
             )
 
-            renderer = PdfRenderer(fileDescriptor)
+            renderer = PdfRenderer(fileDescriptor!!)
 
-            if (renderer.pageCount == 0) {
-                renderer.close()
-                fileDescriptor.close()
+            if (renderer!!.pageCount == 0) {
+                renderer!!.close()
+                fileDescriptor!!.close()
+                tempFile.delete()
                 return@withContext null
             }
 
-            val page = renderer.openPage(0)
+            val page = renderer!!.openPage(0)
 
             // Calculate bitmap dimensions based on DPI
             // PDF points are 1/72 inch, so width in pixels = (widthPoints / 72) * dpi
@@ -81,15 +86,15 @@ class PdfRendererEngine @Inject constructor(
             val result = PdfMapData(bitmap, bitmapWidth, bitmapHeight)
 
             page.close()
-            renderer.close()
-            fileDescriptor.close()
-
-            // Clean up temp file
+            renderer!!.close()
+            fileDescriptor!!.close()
             tempFile.delete()
 
             result
         } catch (e: Exception) {
-            renderer?.close()
+            try { renderer?.close() } catch (_: Exception) {}
+            try { fileDescriptor?.close() } catch (_: Exception) {}
+            tempFile.delete()
             null
         }
     }

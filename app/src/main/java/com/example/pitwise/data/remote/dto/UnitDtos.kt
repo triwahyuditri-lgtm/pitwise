@@ -34,15 +34,19 @@ data class LoaderDto(
 data class HaulerDto(
     val id: Int = 0,
     val category: String = "Hauler",
-    @SerialName("class") val className: String,
-    val material: String,
-    @SerialName("vessel_lcm") val vesselLcm: Double,
-    @SerialName("vessel_bcm_or_ton") val vesselBcmOrTon: Double, // Can be BCM or Ton depending on context
-    @SerialName("spotting_sec") val spottingSec: Double,
-    @SerialName("travel_kmh") val travelKmh: Double,
-    @SerialName("queueing_time_sec") val queueingTimeSec: Double,
-    @SerialName("dumping_sec") val dumpingSec: Double,
-    @SerialName("return_kmh") val returnKmh: Double
+    @SerialName("class") val className: String = "",
+    val material: String = "",
+    @SerialName("vessel_lcm") val vesselLcm: Double = 0.0,
+    @SerialName("vessel_bcm_or_ton") val vesselBcmOrTon: Double = 0.0,
+    @SerialName("spotting_sec") val spottingSec: Double = 0.0,
+    @SerialName("travel_sec") val travelSec: Double = 200.0,
+    @SerialName("queueing_time_sec") val queueingTimeSec: Double = 0.0,
+    @SerialName("dumping_sec") val dumpingSec: Double = 0.0,
+    @SerialName("return_kmh") val returnKmh: Double = 0.0,
+    @SerialName("cycle_time_sec") val cycleTimeSec: Double = 0.0,
+    @SerialName("cycletime_min") val cycleTimeMin: Double = 0.0,
+    @SerialName("specific_gravity") val specificGravity: Double = 1.0,
+    val productivity: Double = 0.0
 )
 
 @Serializable

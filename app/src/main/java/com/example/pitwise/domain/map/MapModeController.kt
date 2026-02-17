@@ -28,6 +28,18 @@ class MapModeController {
     var idPointMarker: MapVertex? = null
         private set
 
+    /**
+     * Optional coordinate converter for measurement calculations.
+     *
+     * When set (e.g., for PDF maps), converts world coordinates (bitmap pixels)
+     * to projected CRS coordinates (e.g., UTM easting/northing in meters)
+     * before computing distances and areas.
+     *
+     * When null (e.g., DXF maps), raw world coordinates are used directly
+     * (already in real-world units like meters).
+     */
+    var coordinateConverter: ((Double, Double) -> Pair<Double, Double>?)? = null
+
     // ── Mode Transitions ──
 
     /**
@@ -102,14 +114,28 @@ class MapModeController {
     // ── Computations ──
 
     /**
+     * Convert collected points through the coordinate converter for measurement.
+     *
+     * For PDF maps: pixel coords → projected CRS (UTM meters)
+     * For DXF maps: raw world coords (already in meters)
+     */
+    private fun convertedPoints(): List<Pair<Double, Double>> {
+        val converter = coordinateConverter
+            ?: return _collectedPoints.map { Pair(it.x, it.y) }
+        return _collectedPoints.mapNotNull { converter(it.x, it.y) }
+    }
+
+    /**
      * Compute total polyline distance from collected points.
+     * Uses coordinate converter if set (for PDF geo-measurement).
      */
     fun computeDistance(): Double {
-        if (_collectedPoints.size < 2) return 0.0
+        val pts = convertedPoints()
+        if (pts.size < 2) return 0.0
         var total = 0.0
-        for (i in 0 until _collectedPoints.size - 1) {
-            val dx = _collectedPoints[i + 1].x - _collectedPoints[i].x
-            val dy = _collectedPoints[i + 1].y - _collectedPoints[i].y
+        for (i in 0 until pts.size - 1) {
+            val dx = pts[i + 1].first - pts[i].first
+            val dy = pts[i + 1].second - pts[i].second
             total += sqrt(dx * dx + dy * dy)
         }
         return total
@@ -117,30 +143,39 @@ class MapModeController {
 
     /**
      * Compute polygon area using Shoelace formula from collected points.
+     * Uses coordinate converter if set (for PDF geo-measurement).
      */
     fun computeArea(): Double {
-        if (_collectedPoints.size < 3) return 0.0
+        val pts = convertedPoints()
+        if (pts.size < 3) return 0.0
         var sum = 0.0
-        for (i in _collectedPoints.indices) {
-            val j = (i + 1) % _collectedPoints.size
-            sum += _collectedPoints[i].x * _collectedPoints[j].y
-            sum -= _collectedPoints[j].x * _collectedPoints[i].y
+        for (i in pts.indices) {
+            val j = (i + 1) % pts.size
+            sum += pts[i].first * pts[j].second
+            sum -= pts[j].first * pts[i].second
         }
         return abs(sum) / 2.0
     }
 
     /**
      * Compute polygon perimeter (closed loop distance).
+     * Uses coordinate converter if set (for PDF geo-measurement).
      */
     fun computePerimeter(): Double {
-        if (_collectedPoints.size < 2) return 0.0
-        var total = computeDistance()
+        val pts = convertedPoints()
+        if (pts.size < 2) return 0.0
+        var total = 0.0
+        for (i in 0 until pts.size - 1) {
+            val dx = pts[i + 1].first - pts[i].first
+            val dy = pts[i + 1].second - pts[i].second
+            total += sqrt(dx * dx + dy * dy)
+        }
         // Add closing segment
-        if (_collectedPoints.size >= 3) {
-            val first = _collectedPoints.first()
-            val last = _collectedPoints.last()
-            val dx = first.x - last.x
-            val dy = first.y - last.y
+        if (pts.size >= 3) {
+            val first = pts.first()
+            val last = pts.last()
+            val dx = first.first - last.first
+            val dy = first.second - last.second
             total += sqrt(dx * dx + dy * dy)
         }
         return total
@@ -149,6 +184,7 @@ class MapModeController {
     /**
      * Check if the polygon is effectively closed
      * (last point is within threshold of first point).
+     * Note: uses raw world coords for UI snap detection (not geo-converted).
      */
     fun isPolygonClosed(thresholdWorld: Double = 5.0): Boolean {
         if (_collectedPoints.size < 3) return false

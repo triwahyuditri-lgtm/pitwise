@@ -6,6 +6,7 @@ import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.pitwise.data.local.PitwiseDatabase
 import com.example.pitwise.data.local.dao.BaseUnitVersionDao
+import com.example.pitwise.data.local.dao.EquipmentDao
 import com.example.pitwise.data.local.dao.MapDao
 import com.example.pitwise.data.local.dao.UnitBrandDao
 import com.example.pitwise.data.local.dao.UnitModelDao
@@ -65,5 +66,9 @@ object DatabaseModule {
     @Provides
     fun provideMapDao(database: PitwiseDatabase): MapDao =
         database.mapDao()
+
+    @Provides
+    fun provideEquipmentDao(database: PitwiseDatabase): EquipmentDao =
+        database.equipmentDao()
 }
 

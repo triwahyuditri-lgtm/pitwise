@@ -65,7 +65,7 @@ data class BottomNavItem(
 val bottomNavItems = listOf(
     BottomNavItem(Screen.Home, "Home", Icons.Default.Home),
     BottomNavItem(Screen.Map, "Map", Icons.Default.Map),
-    BottomNavItem(Screen.Calculate, "Calculate", Icons.Default.Calculate),
+    BottomNavItem(Screen.Calculate, "Calc", Icons.Default.Calculate),
     BottomNavItem(Screen.Productivity, "Prod", Icons.Default.Speed),
     BottomNavItem(Screen.Settings, "Settings", Icons.Default.Settings)
 )
@@ -164,6 +164,7 @@ fun MainScaffold(
                         onNavigateToMap = { navController.navigate(Screen.Map.route) },
                         onNavigateToMeasure = { navController.navigate(Screen.Map.route) },
                         onNavigateToCalculate = { navController.navigate(Screen.Calculate.route) },
+                        onNavigateToProductivity = { navController.navigate(Screen.Productivity.route) },
                         onLogout = onLogout
                     )
                 }

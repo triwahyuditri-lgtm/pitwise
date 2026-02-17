@@ -89,7 +89,15 @@ data class GeoPdfMetadata(
     /** PDF page width in user-space units (points) */
     val pageWidth: Double,
     /** PDF page height in user-space units (points) */
-    val pageHeight: Double
+    val pageHeight: Double,
+    /** Viewport BBox origin X in PDF points (0 if full page) */
+    val bboxX: Double = 0.0,
+    /** Viewport BBox origin Y in PDF points (0 if full page) */
+    val bboxY: Double = 0.0,
+    /** Viewport BBox width in PDF points (pageWidth if full page) */
+    val bboxWidth: Double = pageWidth,
+    /** Viewport BBox height in PDF points (pageHeight if full page) */
+    val bboxHeight: Double = pageHeight
 )
 
 /**
