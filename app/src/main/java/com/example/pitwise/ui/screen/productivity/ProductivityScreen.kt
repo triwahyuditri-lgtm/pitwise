@@ -159,10 +159,20 @@ fun ProductivityScreen(
                 ProdField("Fill Factor", uiState.fillFactor) { viewModel.updateField("fillFactor", it) }
                 Spacer(modifier = Modifier.height(8.dp))
                 ProdField("Cycle Time (sec)", uiState.cycleTime) { viewModel.updateField("cycleTime", it) }
+                ProdField("Swell Factor", uiState.swellFactor) { viewModel.updateField("swellFactor", it) }
                 Spacer(modifier = Modifier.height(8.dp))
-                ProdField("Effective Working Hours", uiState.workingHours) { viewModel.updateField("workingHours", it) }
+                ProdField("Job Efficiency", uiState.jobEfficiency) { viewModel.updateField("jobEfficiency", it) }
                 Spacer(modifier = Modifier.height(8.dp))
-                ProdField("Target Production", uiState.targetProduction) { viewModel.updateField("targetProduction", it) }
+                ProdField("Efektifitas Kerja (EFF)", uiState.effectiveWorkingHours) { viewModel.updateField("effectiveWorkingHours", it) }
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    "ℹ Jam kerja efektif alat per hari. Contoh: 2 shift = 14 jam.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = PitwiseGray400,
+                    modifier = Modifier.padding(horizontal = 4.dp)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                ProdField("Target Produktifitas", uiState.targetProduction) { viewModel.updateField("targetProduction", it) }
 
                 Spacer(modifier = Modifier.height(16.dp))
 

@@ -7,10 +7,15 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Calculates actual productivity per shift and deviation from target.
+ * Calculates actual productivity (BCM/hr) and deviation from target.
  *
- * Productivity/hr = (Bucket × FillFactor × 3600) / CycleTime_sec
- * Total Production = Productivity/hr × Effective Hours
+ * Formula:
+ *   Pdt'y (BCM/hr) = (3600 × BucketCap_LCM × FillFactor × JobEff)
+ *                     / (CycleTime_sec × SwellFactor)
+ *
+ * When a database productivity value is available, it takes precedence
+ * over the formula calculation.
+ *
  * Deviation (%) = ((Actual - Target) / Target) × 100
  *
  * Status:
@@ -31,10 +36,20 @@ class ProductivityCalculator @Inject constructor() {
             input.cycleTimeActualSec <= 0 ||
             input.effectiveWorkingHours <= 0 ||
             input.targetProduction <= 0 ||
-            input.fillFactor <= 0 || input.fillFactor > 1.0
+            input.fillFactor <= 0 ||
+            input.swellFactor <= 0 ||
+            input.jobEfficiency <= 0
         ) return null
 
-        val productivityPerHour = (input.bucketOrVesselM3 * input.fillFactor * 3600.0) / input.cycleTimeActualSec
+        // Use database productivity value if available, otherwise calculate from formula
+        val productivityPerHour = if (input.dbProductivityPerHour != null && input.dbProductivityPerHour > 0) {
+            input.dbProductivityPerHour
+        } else {
+            (input.bucketOrVesselM3 * input.fillFactor * input.jobEfficiency * 3600.0) /
+                    (input.cycleTimeActualSec * input.swellFactor)
+        }
+
+        // Actual total production = productivity/hr × working hours
         val totalProduction = productivityPerHour * input.effectiveWorkingHours
         val deviation = ((totalProduction - input.targetProduction) / input.targetProduction) * 100.0
 

@@ -15,6 +15,7 @@ import javax.inject.Inject
 data class AuthUiState(
     val isLoading: Boolean = false,
     val error: String? = null,
+    val successMessage: String? = null,
     val session: UserSession? = null,
     val loginSuccess: Boolean = false
 )
@@ -77,14 +78,22 @@ class AuthViewModel @Inject constructor(
 
     fun signUp(email: String, password: String, fullName: String) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            _uiState.value = _uiState.value.copy(isLoading = true, error = null, successMessage = null)
             val result = userRepository.signUp(email, password, fullName)
             result.fold(
-                onSuccess = {
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        loginSuccess = true
-                    )
+                onSuccess = { resultMessage ->
+                    if (resultMessage == "CONFIRM_EMAIL") {
+                        // Email confirmation is required — don't navigate, show message
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            successMessage = "Akun berhasil dibuat! Cek email Anda untuk verifikasi, lalu login."
+                        )
+                    } else {
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            loginSuccess = true
+                        )
+                    }
                 },
                 onFailure = { error ->
                     _uiState.value = _uiState.value.copy(
@@ -104,7 +113,7 @@ class AuthViewModel @Inject constructor(
     }
 
     fun clearError() {
-        _uiState.value = _uiState.value.copy(error = null)
+        _uiState.value = _uiState.value.copy(error = null, successMessage = null)
     }
 
     fun resetLoginSuccess() {

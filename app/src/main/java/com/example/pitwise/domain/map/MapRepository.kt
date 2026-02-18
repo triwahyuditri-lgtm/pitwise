@@ -54,6 +54,9 @@ class MapRepository @Inject constructor(
     fun getAnnotationsForMap(mapId: Long): Flow<List<MapAnnotation>> =
         mapDao.getAnnotationsForMap(mapId)
 
+    fun getBaseMapAnnotations(): Flow<List<MapAnnotation>> =
+        mapDao.getBaseMapAnnotations()
+
     suspend fun getAnnotationById(id: Long): MapAnnotation? =
         mapDao.getAnnotationById(id)
 

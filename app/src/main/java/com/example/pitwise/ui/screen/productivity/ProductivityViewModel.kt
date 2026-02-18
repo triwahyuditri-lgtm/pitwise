@@ -20,8 +20,11 @@ data class ProductivityUiState(
     val bucketCapacity: String = "",
     val fillFactor: String = "0.85",
     val cycleTime: String = "",
-    val workingHours: String = "",
+    val swellFactor: String = "1.0",
+    val jobEfficiency: String = "0.83",
+    val effectiveWorkingHours: String = "",  // Jam kerja efektif (user input)
     val targetProduction: String = "",
+    val dbProductivity: Double? = null,  // From database spec
     val result: ProductivityResult? = null,
 
     // Unit picker state
@@ -127,7 +130,10 @@ class ProductivityViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     bucketCapacity = capacity.toString(),
                     fillFactor = fillFactor.toString(),
-                    cycleTime = (spec.cycleTimeRefSec ?: 0.0).toString()
+                    cycleTime = (spec.cycleTimeRefSec ?: 0.0).toString(),
+                    swellFactor = (spec.swellFactor ?: 1.0).toString(),
+                    jobEfficiency = (spec.jobEfficiency ?: 0.83).toString(),
+                    dbProductivity = spec.productivity
                 )
             }
         }
@@ -148,7 +154,9 @@ class ProductivityViewModel @Inject constructor(
             "bucketCapacity" -> current.copy(bucketCapacity = value)
             "fillFactor" -> current.copy(fillFactor = value)
             "cycleTime" -> current.copy(cycleTime = value)
-            "workingHours" -> current.copy(workingHours = value)
+            "swellFactor" -> current.copy(swellFactor = value)
+            "jobEfficiency" -> current.copy(jobEfficiency = value)
+            "effectiveWorkingHours" -> current.copy(effectiveWorkingHours = value)
             "targetProduction" -> current.copy(targetProduction = value)
             else -> current
         }
@@ -161,8 +169,11 @@ class ProductivityViewModel @Inject constructor(
             bucketOrVesselM3 = state.bucketCapacity.toDoubleOrNull() ?: 0.0,
             fillFactor = state.fillFactor.toDoubleOrNull() ?: 0.85,
             cycleTimeActualSec = state.cycleTime.toDoubleOrNull() ?: 0.0,
-            effectiveWorkingHours = state.workingHours.toDoubleOrNull() ?: 0.0,
-            targetProduction = state.targetProduction.toDoubleOrNull() ?: 0.0
+            swellFactor = state.swellFactor.toDoubleOrNull() ?: 1.0,
+            jobEfficiency = state.jobEfficiency.toDoubleOrNull() ?: 0.83,
+            effectiveWorkingHours = state.effectiveWorkingHours.toDoubleOrNull() ?: 0.0,
+            targetProduction = state.targetProduction.toDoubleOrNull() ?: 0.0,
+            dbProductivityPerHour = state.dbProductivity
         )
         val result = productivityCalc.calculate(input)
         _uiState.value = state.copy(result = result)

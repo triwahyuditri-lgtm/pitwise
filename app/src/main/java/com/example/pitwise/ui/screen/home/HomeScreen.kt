@@ -155,7 +155,13 @@ fun HomeScreen(
 
             // Welcome section
             Text(
-                text = "Welcome, ${if (role == "GUEST") "Guest" else "User"}",
+                text = "Welcome, ${
+                    when {
+                        role == "GUEST" -> "Guest"
+                        !uiState.session?.fullName.isNullOrBlank() -> uiState.session?.fullName
+                        else -> "User"
+                    }
+                }",
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.onBackground
             )

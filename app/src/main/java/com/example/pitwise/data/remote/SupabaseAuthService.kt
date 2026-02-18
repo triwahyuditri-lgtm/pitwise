@@ -23,6 +23,7 @@ class SupabaseAuthService @Inject constructor(
     private var currentToken: String? = null
     private var currentUserId: String? = null
     private var currentRole: String = "user"
+    private var currentFullName: String? = null
 
     /**
      * Sign up a new user with email and password.
@@ -67,16 +68,19 @@ class SupabaseAuthService @Inject constructor(
         currentToken = null
         currentUserId = null
         currentRole = "user"
+        currentFullName = null
     }
 
     fun getAccessToken(): String? = currentToken
     fun getCurrentUserId(): String? = currentUserId
     fun getCurrentRole(): String = currentRole
+    fun getCurrentFullName(): String? = currentFullName
     fun isAuthenticated(): Boolean = currentToken != null
 
     private fun handleAuthSuccess(response: AuthResponse) {
         currentToken = response.accessToken
         currentUserId = response.user?.id
         currentRole = response.user?.userMetadata?.role ?: "user"
+        currentFullName = response.user?.userMetadata?.fullName
     }
 }

@@ -45,6 +45,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.pitwise.ui.screen.welcome.AuthViewModel
 import com.example.pitwise.ui.theme.PitwiseError
@@ -234,6 +235,27 @@ fun LoginScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = PitwiseError
                     )
+                }
+            }
+
+            // Success message (e.g., email confirmation required)
+            if (uiState.successMessage != null) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF2E7D32).copy(alpha = 0.15f), RoundedCornerShape(8.dp))
+                        .padding(12.dp)
+                ) {
+                    Text(
+                        text = uiState.successMessage ?: "",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF4CAF50)
+                    )
+                }
+                // Auto-switch to Sign In mode so user can login after confirming email
+                LaunchedEffect(uiState.successMessage) {
+                    isSignUp = false
                 }
             }
 

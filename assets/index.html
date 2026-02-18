@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PITWISE — Voucher Generator</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --bg: #0a0f0a;
+    --surface: #141a14;
+    --surface2: #1c241c;
+    --border: #2a352a;
+    --primary: #c8e64e;
+    --primary-dim: rgba(200,230,78,0.15);
+    --text: #e8efe8;
+    --text-dim: #7a8a7a;
+    --success: #4ade80;
+    --error: #f87171;
+    --radius: 12px;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 24px;
+  }
+
+  .container {
+    max-width: 680px;
+    margin: 0 auto;
+  }
+
+  /* Header */
+  .header {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  .header .logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .header .logo-icon {
+    width: 40px; height: 40px;
+    background: var(--primary);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+  }
+  .header h1 {
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+  }
+  .header h1 span { color: var(--primary); }
+  .header p {
+    color: var(--text-dim);
+    font-size: 14px;
+    margin-top: 4px;
+  }
+
+  /* Card */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 20px;
+  }
+  .card-title {
+    font-size: 14px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--primary);
+    margin-bottom: 16px;
+  }
+
+  /* Form */
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .form-group.full { grid-column: 1/-1; }
+  .form-group label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .form-group input,
+  .form-group select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .form-group input:focus,
+  .form-group select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-dim);
+  }
+  .form-group input::placeholder {
+    color: var(--text-dim);
+    opacity: 0.6;
+  }
+  select option { background: var(--surface2); }
+
+  /* Discount field */
+  .discount-row {
+    display: none;
+    grid-column: 1/-1;
+  }
+  .discount-row.visible { display: flex; }
+
+  /* Buttons */
+  .btn-row {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+  }
+  .btn {
+    flex: 1;
+    padding: 12px 20px;
+    border: none;
+    border-radius: var(--radius);
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .btn-primary {
+    background: var(--primary);
+    color: #000;
+  }
+  .btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 20px rgba(200,230,78,0.3);
+  }
+  .btn-secondary {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover {
+    border-color: var(--primary);
+  }
+
+  /* Output */
+  .output-area {
+    display: none;
+  }
+  .output-area.visible { display: block; }
+  .sql-box {
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #c9d1d9;
+    white-space: pre-wrap;
+    word-break: break-all;
+    position: relative;
+    max-height: 300px;
+    overflow-y: auto;
+  }
+  .sql-box .kw { color: #ff7b72; }
+  .sql-box .str { color: #a5d6ff; }
+  .sql-box .num { color: #79c0ff; }
+  .sql-box .comment { color: #8b949e; }
+
+  .copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .copy-btn:hover { border-color: var(--primary); color: var(--primary); }
+  .copy-btn.copied { background: var(--primary); color: #000; border-color: var(--primary); }
+
+  /* Preview */
+  .preview {
+    margin-top: 16px;
+    padding: 16px;
+    background: var(--surface2);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+  }
+  .preview-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border);
+  }
+  .preview-row:last-child { border-bottom: none; }
+  .preview-row .label { color: var(--text-dim); }
+  .preview-row .value { font-weight: 600; color: var(--text); }
+  .preview-row .value.highlight { color: var(--primary); }
+
+  /* History */
+  .history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .history-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    background: var(--surface2);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    font-size: 13px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  .history-item:hover { border-color: var(--primary); }
+  .history-item .code { font-weight: 700; font-family: 'JetBrains Mono', monospace; color: var(--primary); }
+  .history-item .meta { color: var(--text-dim); }
+  .history-empty {
+    text-align: center;
+    padding: 24px;
+    color: var(--text-dim);
+    font-size: 13px;
+  }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--success);
+    color: #000;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    opacity: 0;
+    transition: all 0.3s ease;
+    z-index: 100;
+  }
+  .toast.show {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+  }
+
+  @media (max-width: 600px) {
+    .form-grid { grid-template-columns: 1fr; }
+    .btn-row { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">
+      <div class="logo-icon">⛏️</div>
+      <h1>PITWISE <span>Voucher Generator</span></h1>
+    </div>
+    <p>Generate SQL untuk membuat voucher — tinggal copy & paste ke Supabase</p>
+  </div>
+
+  <!-- Form Card -->
+  <div class="card">
+    <div class="card-title">⚙️ Konfigurasi Voucher</div>
+    <div class="form-grid">
+
+      <div class="form-group full">
+        <label>Kode Voucher</label>
+        <input type="text" id="code" placeholder="Contoh: TEMANTAMBANG" style="text-transform:uppercase" maxlength="30">
+      </div>
+
+      <div class="form-group">
+        <label>Jenis Voucher</label>
+        <select id="type" onchange="toggleDiscount()">
+          <option value="premium_days">🎁 Premium Gratis (Hari)</option>
+          <option value="discount">💰 Diskon Pembayaran (%)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Durasi (Hari)</label>
+        <input type="number" id="duration" value="30" min="1" max="36500">
+      </div>
+
+      <div class="form-group discount-row" id="discountRow">
+        <label>Persentase Diskon (%)</label>
+        <input type="number" id="discount" value="50" min="1" max="100">
+      </div>
+
+      <div class="form-group">
+        <label>Maks. Penggunaan</label>
+        <input type="number" id="maxUsage" value="30" min="1" max="100000">
+      </div>
+
+      <div class="form-group">
+        <label>Berlaku Sampai</label>
+        <input type="date" id="validUntil">
+      </div>
+
+      <div class="form-group full">
+        <label>Created By (UUID Anda)</label>
+        <input type="text" id="createdBy" value="03c3685d-ca19-47d2-bdca-e41010ebf67e" placeholder="UUID dari profiles">
+      </div>
+
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="generateSQL()">⚡ Generate SQL</button>
+      <button class="btn btn-secondary" onclick="resetForm()">🔄 Reset</button>
+    </div>
+  </div>
+
+  <!-- Output Card -->
+  <div class="card output-area" id="outputCard">
+    <div class="card-title">📋 SQL Output</div>
+    <div style="position:relative">
+      <div class="sql-box" id="sqlOutput"></div>
+      <button class="copy-btn" id="copyBtn" onclick="copySQL()">📋 Copy</button>
+    </div>
+
+    <div class="preview" id="preview"></div>
+  </div>
+
+  <!-- History Card -->
+  <div class="card">
+    <div class="card-title">📜 Riwayat Generate</div>
+    <div class="history-list" id="historyList">
+      <div class="history-empty">Belum ada voucher yang digenerate</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast">✅ SQL berhasil dicopy!</div>
+
+<script>
+  // Set default date to 3 months from now
+  const d = new Date();
+  d.setMonth(d.getMonth() + 3);
+  document.getElementById('validUntil').value = d.toISOString().split('T')[0];
+
+  let history = JSON.parse(localStorage.getItem('pitwise_voucher_history') || '[]');
+  let rawSQL = '';
+
+  function toggleDiscount() {
+    const type = document.getElementById('type').value;
+    const row = document.getElementById('discountRow');
+    row.classList.toggle('visible', type === 'discount');
+  }
+
+  function generateSQL() {
+    const code = document.getElementById('code').value.trim().toUpperCase();
+    const type = document.getElementById('type').value;
+    const duration = parseInt(document.getElementById('duration').value) || 30;
+    const discount = parseInt(document.getElementById('discount').value) || 0;
+    const maxUsage = parseInt(document.getElementById('maxUsage').value) || 30;
+    const validUntil = document.getElementById('validUntil').value;
+    const createdBy = document.getElementById('createdBy').value.trim();
+
+    if (!code) { alert('Masukkan kode voucher!'); return; }
+    if (!validUntil) { alert('Pilih tanggal berlaku!'); return; }
+    if (!createdBy) { alert('Masukkan UUID created_by!'); return; }
+
+    const isDiscount = type === 'discount';
+
+    // Build SQL
+    let sql = `-- Voucher: ${code}\n`;
+    sql += `-- Jenis: ${isDiscount ? 'Diskon ' + discount + '%' : 'Premium ' + duration + ' hari'}\n`;
+    sql += `-- Maks: ${maxUsage} pengguna | Berlaku sampai: ${validUntil}\n\n`;
+    sql += `INSERT INTO public.vouchers (\n`;
+    sql += `  code, duration_days, max_usage, valid_until,\n`;
+    sql += `  created_by, voucher_type, discount_percent\n`;
+    sql += `)\nVALUES (\n`;
+    sql += `  '${code}',\n`;
+    sql += `  ${duration},\n`;
+    sql += `  ${maxUsage},\n`;
+    sql += `  '${validUntil}'::timestamptz,\n`;
+    sql += `  '${createdBy}',\n`;
+    sql += `  '${type}',\n`;
+    sql += `  ${isDiscount ? discount : 0}\n`;
+    sql += `);`;
+
+    rawSQL = sql;
+
+    // Syntax highlight
+    let highlighted = sql
+      .replace(/(INSERT INTO|VALUES|public\.vouchers)/g, '<span class="kw">$1</span>')
+      .replace(/'([^']*)'/g, "'<span class=\"str\">$1</span>'")
+      .replace(/\b(\d+)\b/g, '<span class="num">$1</span>')
+      .replace(/(--.*)/g, '<span class="comment">$1</span>');
+
+    document.getElementById('sqlOutput').innerHTML = highlighted;
+
+    // Preview
+    const originalPrice = 49000;
+    const discountedPrice = isDiscount ? Math.floor(originalPrice * (1 - discount / 100)) : null;
+
+    let previewHTML = '';
+    previewHTML += `<div class="preview-row"><span class="label">Kode</span><span class="value highlight">${code}</span></div>`;
+    previewHTML += `<div class="preview-row"><span class="label">Jenis</span><span class="value">${isDiscount ? '💰 Diskon' : '🎁 Premium Gratis'}</span></div>`;
+    previewHTML += `<div class="preview-row"><span class="label">Durasi</span><span class="value">${duration} hari</span></div>`;
+    if (isDiscount) {
+      previewHTML += `<div class="preview-row"><span class="label">Diskon</span><span class="value highlight">${discount}%</span></div>`;
+      previewHTML += `<div class="preview-row"><span class="label">Harga Normal</span><span class="value">Rp ${originalPrice.toLocaleString('id-ID')}</span></div>`;
+      previewHTML += `<div class="preview-row"><span class="label">Harga Setelah Diskon</span><span class="value highlight">Rp ${discountedPrice.toLocaleString('id-ID')}</span></div>`;
+    }
+    previewHTML += `<div class="preview-row"><span class="label">Maks Pengguna</span><span class="value">${maxUsage}</span></div>`;
+    previewHTML += `<div class="preview-row"><span class="label">Berlaku Sampai</span><span class="value">${validUntil}</span></div>`;
+
+    document.getElementById('preview').innerHTML = previewHTML;
+    document.getElementById('outputCard').classList.add('visible');
+
+    // Save to history
+    history.unshift({
+      code,
+      type: isDiscount ? `Diskon ${discount}%` : `${duration} hari`,
+      maxUsage,
+      date: new Date().toLocaleDateString('id-ID'),
+      sql: rawSQL
+    });
+    if (history.length > 20) history.pop();
+    localStorage.setItem('pitwise_voucher_history', JSON.stringify(history));
+    renderHistory();
+
+    // Scroll to output
+    document.getElementById('outputCard').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function copySQL() {
+    navigator.clipboard.writeText(rawSQL).then(() => {
+      const btn = document.getElementById('copyBtn');
+      btn.textContent = '✅ Copied!';
+      btn.classList.add('copied');
+      showToast();
+      setTimeout(() => {
+        btn.textContent = '📋 Copy';
+        btn.classList.remove('copied');
+      }, 2000);
+    });
+  }
+
+  function showToast() {
+    const toast = document.getElementById('toast');
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2500);
+  }
+
+  function resetForm() {
+    document.getElementById('code').value = '';
+    document.getElementById('type').value = 'premium_days';
+    document.getElementById('duration').value = '30';
+    document.getElementById('discount').value = '50';
+    document.getElementById('maxUsage').value = '30';
+    const d = new Date(); d.setMonth(d.getMonth() + 3);
+    document.getElementById('validUntil').value = d.toISOString().split('T')[0];
+    document.getElementById('discountRow').classList.remove('visible');
+    document.getElementById('outputCard').classList.remove('visible');
+  }
+
+  function renderHistory() {
+    const list = document.getElementById('historyList');
+    if (history.length === 0) {
+      list.innerHTML = '<div class="history-empty">Belum ada voucher yang digenerate</div>';
+      return;
+    }
+    list.innerHTML = history.map((h, i) => `
+      <div class="history-item" onclick="loadHistory(${i})">
+        <span class="code">${h.code}</span>
+        <span class="meta">${h.type} · ${h.maxUsage} user · ${h.date}</span>
+      </div>
+    `).join('');
+  }
+
+  function loadHistory(idx) {
+    const h = history[idx];
+    rawSQL = h.sql;
+    let highlighted = h.sql
+      .replace(/(INSERT INTO|VALUES|public\.vouchers)/g, '<span class="kw">$1</span>')
+      .replace(/'([^']*)'/g, "'<span class=\"str\">$1</span>'")
+      .replace(/\b(\d+)\b/g, '<span class="num">$1</span>')
+      .replace(/(--.*)/g, '<span class="comment">$1</span>');
+    document.getElementById('sqlOutput').innerHTML = highlighted;
+    document.getElementById('preview').innerHTML = '';
+    document.getElementById('outputCard').classList.add('visible');
+    document.getElementById('outputCard').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  renderHistory();
+</script>
+
+</body>
+</html>

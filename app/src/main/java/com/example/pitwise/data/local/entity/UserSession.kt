@@ -12,9 +12,13 @@ data class UserSession(
     @ColumnInfo(name = "user_id")
     val userId: String? = null,
 
+    @ColumnInfo(name = "full_name")
+    val fullName: String? = null,
+
     @ColumnInfo(name = "role")
     val role: String = "GUEST", // "GUEST", "USER", "SUPERADMIN"
 
     @ColumnInfo(name = "last_login")
     val lastLogin: Long = System.currentTimeMillis()
 )
+

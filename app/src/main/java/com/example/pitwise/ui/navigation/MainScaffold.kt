@@ -46,9 +46,12 @@ import com.example.pitwise.ui.screen.calibration.CalibrationScreen
 import com.example.pitwise.ui.screen.home.HomeScreen
 import com.example.pitwise.ui.screen.map.MapScreen
 import com.example.pitwise.ui.screen.maplist.MapListScreen
+import com.example.pitwise.ui.screen.basemap.BaseMapScreen
 
 import com.example.pitwise.ui.screen.productivity.ProductivityScreen
 import com.example.pitwise.ui.screen.settings.SettingsScreen
+import com.example.pitwise.ui.screen.subscription.SubscriptionScreen
+import com.example.pitwise.ui.screen.voucher.VoucherScreen
 import com.example.pitwise.ui.screen.unitsettings.UnitSettingsScreen
 import com.example.pitwise.ui.theme.PitwiseBackground
 import com.example.pitwise.ui.theme.PitwiseGray400
@@ -173,6 +176,9 @@ fun MainScaffold(
                     MapListScreen(
                         onOpenMap = { mapId ->
                             navController.navigate(Screen.MapViewer.createRoute(mapId))
+                        },
+                        onOpenBaseMap = {
+                            navController.navigate(Screen.BaseMap.route)
                         }
                     )
                 }
@@ -199,6 +205,12 @@ fun MainScaffold(
                         onNavigateToCalibration = {
                             navController.navigate(Screen.Calibration.route)
                         },
+                        onNavigateToSubscription = {
+                            navController.navigate(Screen.Subscription.route)
+                        },
+                        onNavigateToVoucher = {
+                            navController.navigate(Screen.Voucher.route)
+                        },
                         onShowGuideAgain = {
                             scope.launch {
                                 onboardingPreferences.resetOnboarding()
@@ -223,8 +235,31 @@ fun MainScaffold(
                     )
                 }
 
+                composable(Screen.BaseMap.route) {
+                    BaseMapScreen(
+                        onBack = { navController.popBackStack() },
+                        onSendToCalculator = { type, value ->
+                            navController.navigate(
+                                Screen.CalculateContextual.createRoute(type, value)
+                            )
+                        }
+                    )
+                }
+
                 composable(Screen.Calibration.route) {
                     CalibrationScreen(
+                        onBack = { navController.popBackStack() }
+                    )
+                }
+
+                composable(Screen.Subscription.route) {
+                    SubscriptionScreen(
+                        onBack = { navController.popBackStack() }
+                    )
+                }
+
+                composable(Screen.Voucher.route) {
+                    VoucherScreen(
                         onBack = { navController.popBackStack() }
                     )
                 }
@@ -233,6 +268,9 @@ fun MainScaffold(
                     MapListScreen(
                         onOpenMap = { mapId ->
                             navController.navigate(Screen.MapViewer.createRoute(mapId))
+                        },
+                        onOpenBaseMap = {
+                            navController.navigate(Screen.BaseMap.route)
                         }
                     )
                 }

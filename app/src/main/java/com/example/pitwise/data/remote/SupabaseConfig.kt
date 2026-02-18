@@ -11,4 +11,5 @@ object SupabaseConfig {
     // REST API endpoints
     const val AUTH_ENDPOINT = "$SUPABASE_URL/auth/v1"
     const val REST_ENDPOINT = "$SUPABASE_URL/rest/v1"
+    const val FUNCTIONS_ENDPOINT = "$SUPABASE_URL/functions/v1"
 }

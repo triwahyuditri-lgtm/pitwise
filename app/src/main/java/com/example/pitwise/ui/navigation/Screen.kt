@@ -22,6 +22,9 @@ sealed class Screen(val route: String) {
     data object AdvisorResult : Screen("advisor_result")
     data object UnitSettings : Screen("unit_settings")
     data object Calibration : Screen("calibration")
+    data object Subscription : Screen("subscription")
+    data object Voucher : Screen("voucher")
+    data object BaseMap : Screen("base_map")
     data object MapList : Screen("map_list")
     data object MapViewer : Screen("map_viewer/{mapId}") {
         fun createRoute(mapId: Long) = "map_viewer/$mapId"

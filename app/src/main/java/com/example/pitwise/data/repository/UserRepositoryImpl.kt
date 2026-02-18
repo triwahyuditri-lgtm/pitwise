@@ -45,6 +45,7 @@ class UserRepositoryImpl @Inject constructor(
                 sessionDao.insert(
                     UserSession(
                         userId = authResponse.user?.id,
+                        fullName = authService.getCurrentFullName(),
                         role = appRole,
                         lastLogin = System.currentTimeMillis()
                     )
@@ -62,15 +63,23 @@ class UserRepositoryImpl @Inject constructor(
         val result = authService.signUp(email, password, metadata)
         return result.fold(
             onSuccess = { authResponse ->
-                sessionDao.clearSessions()
-                sessionDao.insert(
-                    UserSession(
-                        userId = authResponse.user?.id,
-                        role = "USER",
-                        lastLogin = System.currentTimeMillis()
+                // If Supabase has email confirmation enabled, access_token will be empty
+                if (authResponse.accessToken.isBlank()) {
+                    // Don't create a local session — user must confirm email first, then login
+                    Result.success("CONFIRM_EMAIL")
+                } else {
+                    // Email confirmation is disabled — user is immediately authenticated
+                    sessionDao.clearSessions()
+                    sessionDao.insert(
+                        UserSession(
+                            userId = authResponse.user?.id,
+                            fullName = fullName,
+                            role = "USER",
+                            lastLogin = System.currentTimeMillis()
+                        )
                     )
-                )
-                Result.success("USER")
+                    Result.success("USER")
+                }
             },
             onFailure = { error ->
                 Result.failure(error)

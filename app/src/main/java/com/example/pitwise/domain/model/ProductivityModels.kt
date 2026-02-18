@@ -6,8 +6,11 @@ data class ProductivityInput(
     val bucketOrVesselM3: Double,
     val fillFactor: Double = 0.85,
     val cycleTimeActualSec: Double,
-    val effectiveWorkingHours: Double,
-    val targetProduction: Double  // BCM or ton
+    val swellFactor: Double = 1.0,
+    val jobEfficiency: Double = 0.83,
+    val effectiveWorkingHours: Double,  // Jam kerja efektif (e.g. 14 hours)
+    val targetProduction: Double,  // Target total production per shift
+    val dbProductivityPerHour: Double? = null  // From database, used if available
 )
 
 enum class ProductivityStatus { GREEN, YELLOW, RED }

@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Satellite
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -80,6 +81,7 @@ import java.util.Locale
 @Composable
 fun MapListScreen(
     onOpenMap: (Long) -> Unit,
+    onOpenBaseMap: () -> Unit = {},
     viewModel: MapListViewModel = hiltViewModel()
 ) {
     val maps by viewModel.maps.collectAsState()
@@ -310,6 +312,44 @@ fun MapListScreen(
                         style = MaterialTheme.typography.titleLarge,
                         color = MaterialTheme.colorScheme.onBackground
                     )
+                },
+                actions = {
+                    // Base Map Preview Box
+                    Box(
+                        modifier = Modifier
+                            .padding(end = 12.dp)
+                            .size(width = 100.dp, height = 44.dp)
+                            .background(
+                                Color(0xFF2196F3).copy(alpha = 0.12f),
+                                RoundedCornerShape(10.dp)
+                            )
+                            .border(
+                                1.dp,
+                                Color(0xFF2196F3).copy(alpha = 0.4f),
+                                RoundedCornerShape(10.dp)
+                            )
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable { onOpenBaseMap() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Satellite,
+                                contentDescription = "Base Map",
+                                tint = Color(0xFF2196F3),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                "Base Map",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Color(0xFF2196F3),
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background

@@ -66,6 +66,9 @@ interface MapDao {
     @Query("DELETE FROM map_annotations WHERE map_id = :mapId")
     suspend fun deleteAnnotationsForMap(mapId: Long)
 
+    @Query("SELECT * FROM map_annotations WHERE map_id IS NULL ORDER BY created_at DESC")
+    fun getBaseMapAnnotations(): Flow<List<MapAnnotation>>
+
     @Query("SELECT COUNT(*) FROM map_annotations WHERE map_id = :mapId AND type = 'POINT'")
     suspend fun countPointAnnotations(mapId: Long): Int
 }

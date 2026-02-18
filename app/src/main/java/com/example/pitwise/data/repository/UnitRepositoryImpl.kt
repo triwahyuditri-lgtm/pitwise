@@ -108,8 +108,12 @@ class UnitRepositoryImpl @Inject constructor(
                             bucketCapacityM3 = it.bucketCapBcm,
                             bucketCapacityLcm = it.bucketCapLcm,
                             fillFactorDefault = it.fillFactor,
+                            swellFactor = it.swellFactor,
+                            specificGravity = it.sg,
+                            jobEfficiency = it.jobEff,
                             cycleTimeRefSec = it.cycleTimeSec,
                             enginePowerHp = 0.0,
+                            productivity = it.productivity,
                             createdBy = "SUPABASE"
                         )
                     }
@@ -148,6 +152,7 @@ class UnitRepositoryImpl @Inject constructor(
                             bucketCapacityM3 = it.bladeVolumeM3, // Treat blade volume as capacity
                             cycleTimeRefSec = it.cycleTimeMin * 60, // Convert min to sec
                             fillFactorDefault = it.bladeFactor,
+                            productivity = it.productivity,
                             createdBy = "SUPABASE"
                         )
                     }

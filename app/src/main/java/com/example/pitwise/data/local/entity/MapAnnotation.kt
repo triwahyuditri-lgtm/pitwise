@@ -17,7 +17,8 @@ import androidx.room.PrimaryKey
             entity = MapEntry::class,
             parentColumns = ["id"],
             childColumns = ["map_id"],
-            onDelete = ForeignKey.CASCADE
+            onDelete = ForeignKey.CASCADE,
+            deferred = true
         )
     ]
 )
@@ -26,7 +27,7 @@ data class MapAnnotation(
     val id: Long = 0,
 
     @ColumnInfo(name = "map_id", index = true)
-    val mapId: Long,
+    val mapId: Long? = null,
 
     /** "POINT", "LINE", or "POLYGON" */
     val type: String,

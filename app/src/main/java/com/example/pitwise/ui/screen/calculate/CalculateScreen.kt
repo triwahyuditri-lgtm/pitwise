@@ -444,16 +444,16 @@ private fun ObVolumeForm(viewModel: CalculateViewModel, uiState: CalculateUiStat
             Column {
                 Text("RESULT", style = MaterialTheme.typography.labelMedium, color = PitwisePrimary)
                 Spacer(modifier = Modifier.height(8.dp))
-                ResultRow("Volume BCM", "${"%.2f".format(result.volumeBcm)} m³")
-                ResultRow("Volume LCM", "${"%.2f".format(result.volumeLcm)} m³")
-                ResultRow("Tonnage", "${"%.2f".format(result.tonnage)} ton")
+                ResultRow("Volume Insitu", "${"%.3f".format(result.volumeBcm)} BCM")
+                ResultRow("Volume Loose", "${"%.3f".format(result.volumeLcm)} LCM")
+                ResultRow("Tonnage", "${"%.3f".format(result.tonnage)} Ton")
                 Spacer(modifier = Modifier.height(12.dp))
                 Button(
                     onClick = {
                         viewModel.shareResult(context, "OB Volume", listOf(
-                            "Volume BCM" to "${"%.2f".format(result.volumeBcm)} m³",
-                            "Volume LCM" to "${"%.2f".format(result.volumeLcm)} m³",
-                            "Tonnage" to "${"%.2f".format(result.tonnage)} ton"
+                            "Volume Insitu" to "${"%.3f".format(result.volumeBcm)} BCM",
+                            "Volume Loose" to "${"%.3f".format(result.volumeLcm)} LCM",
+                            "Tonnage" to "${"%.3f".format(result.tonnage)} Ton"
                         ))
                     },
                     modifier = Modifier.fillMaxWidth().height(48.dp),
@@ -574,7 +574,14 @@ private fun HaulingCycleForm(viewModel: CalculateViewModel, uiState: CalculateUi
     Spacer(modifier = Modifier.height(8.dp))
     PitwiseField("Dumping Time (min)", dumpTime, { dumpTime = it })
     Spacer(modifier = Modifier.height(8.dp))
-    PitwiseField("Vessel Capacity (m³)", vessel, { vessel = it })
+    PitwiseField("Vessel Capacity (BCM)", vessel, { vessel = it })
+    Spacer(modifier = Modifier.height(2.dp))
+    Text(
+        "ℹ Input kapasitas vessel hauler berdasar data uji petik untuk hasil optimal.",
+        style = MaterialTheme.typography.labelSmall,
+        color = PitwiseGray400,
+        modifier = Modifier.padding(horizontal = 4.dp)
+    )
     Spacer(modifier = Modifier.height(16.dp))
 
     val canCalculate = (distance.toDoubleOrNull() ?: 0.0) > 0.0 &&
@@ -623,14 +630,14 @@ private fun HaulingCycleForm(viewModel: CalculateViewModel, uiState: CalculateUi
                 Spacer(modifier = Modifier.height(8.dp))
                 ResultRow("Cycle Time", "${"%.1f".format(result.cycleTimeMin)} min")
                 ResultRow("Trips/Hour", "${"%.1f".format(result.tripsPerHour)}")
-                ResultRow("Production", "${"%.1f".format(result.productionPerUnit)} m³/hr")
+                ResultRow("Production", "${"%.1f".format(result.productionPerUnit)} BCM/hr")
                 Spacer(modifier = Modifier.height(12.dp))
                 Button(
                     onClick = {
                         viewModel.shareResult(context, "Hauling Cycle", listOf(
                             "Cycle Time" to "${"%.1f".format(result.cycleTimeMin)} min",
                             "Trips/Hour" to "${"%.1f".format(result.tripsPerHour)}",
-                            "Production" to "${"%.1f".format(result.productionPerUnit)} m³/hr"
+                            "Production" to "${"%.1f".format(result.productionPerUnit)} BCM/hr"
                         ))
                     },
                     modifier = Modifier.fillMaxWidth().height(48.dp),
@@ -660,6 +667,13 @@ private fun RoadGradeForm(viewModel: CalculateViewModel, uiState: CalculateUiSta
         "Horizontal Distance (m)", horizontalDist, { horizontalDist = it },
         isPrefilled = hasPrefill,
         onModified = { viewModel.markModifiedFromMap() }
+    )
+    Spacer(modifier = Modifier.height(2.dp))
+    Text(
+        "ℹ Untuk perhitungan optimal, disarankan untuk menghitung jarak per-segment.",
+        style = MaterialTheme.typography.labelSmall,
+        color = PitwiseGray400,
+        modifier = Modifier.padding(horizontal = 4.dp)
     )
     Spacer(modifier = Modifier.height(8.dp))
     PitwiseField("Elevation Start (m)", elevStart, { elevStart = it })
@@ -748,9 +762,23 @@ private fun CutFillForm(viewModel: CalculateViewModel, uiState: CalculateUiState
     Spacer(modifier = Modifier.height(8.dp))
     PitwiseField("Target Elevation (m)", targetElev, { targetElev = it })
     Spacer(modifier = Modifier.height(8.dp))
-    PitwiseField("Road Width (m)", width, { width = it })
+    PitwiseField("Front Width (m)", width, { width = it })
+    Spacer(modifier = Modifier.height(2.dp))
+    Text(
+        "ℹ Lebar front. Gunakan lebar minimum front sesuai spesifikasi unit ataupun SOP yang ada untuk data yang diinput.",
+        style = MaterialTheme.typography.labelSmall,
+        color = PitwiseGray400,
+        modifier = Modifier.padding(horizontal = 4.dp)
+    )
     Spacer(modifier = Modifier.height(8.dp))
-    PitwiseField("Segment Length (m)", length, { length = it })
+    PitwiseField("Front Length (m)", length, { length = it })
+    Spacer(modifier = Modifier.height(2.dp))
+    Text(
+        "ℹ Panjang front. Gunakan panjang minimum front sesuai spesifikasi unit ataupun SOP yang ada untuk data yang diinput.",
+        style = MaterialTheme.typography.labelSmall,
+        color = PitwiseGray400,
+        modifier = Modifier.padding(horizontal = 4.dp)
+    )
     Spacer(modifier = Modifier.height(16.dp))
 
     Button(

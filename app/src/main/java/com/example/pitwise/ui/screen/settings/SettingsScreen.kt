@@ -22,9 +22,11 @@ import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.GpsFixed
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
+import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -61,6 +63,8 @@ import com.example.pitwise.ui.components.AboutDialog
 fun SettingsScreen(
     onNavigateToUnitSettings: () -> Unit,
     onNavigateToCalibration: () -> Unit,
+    onNavigateToSubscription: () -> Unit = {},
+    onNavigateToVoucher: () -> Unit = {},
     onShowGuideAgain: () -> Unit = {},
     viewModel: AuthViewModel = hiltViewModel()
 ) {
@@ -194,6 +198,25 @@ fun SettingsScreen(
                 title = "Starting Guide",
                 subtitle = "Show onboarding guide again",
                 onClick = onShowGuideAgain
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Section: Subscription
+            SectionHeader("SUBSCRIPTION")
+            Spacer(modifier = Modifier.height(8.dp))
+            SettingsItem(
+                icon = Icons.Default.Star,
+                title = "Premium Subscription",
+                subtitle = "Kelola langganan premium",
+                onClick = onNavigateToSubscription
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            SettingsItem(
+                icon = Icons.Default.CardGiftcard,
+                title = "Redeem Voucher",
+                subtitle = "Tukarkan kode voucher premium",
+                onClick = onNavigateToVoucher
             )
 
             Spacer(modifier = Modifier.height(20.dp))

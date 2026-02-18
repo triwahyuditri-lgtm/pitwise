@@ -74,7 +74,10 @@ data class AppMetadata(
 
 @Serializable
 data class UserMetadata(
-    val role: String = "user" // "user" or "superadmin"
+    val role: String = "user", // "user" or "superadmin"
+
+    @SerialName("full_name")
+    val fullName: String? = null
 )
 
 @Serializable

@@ -38,7 +38,7 @@ import com.example.pitwise.data.local.entity.UserSession
         MaterialProperty::class,
         SyncMetadata::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
